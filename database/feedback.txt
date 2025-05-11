@@ -1,0 +1,4 @@
+ (server:CHESS NOW/channel:bot-testing/user:el_ninja.brain/time:'17:37:58')//feedback test test. HOLA AMIGO!! QUE PASSAAAAAA idiot/nhdisksbwo//feedback HOLA
+//feedback for gods sake  (server:CHESS NOW/channel:bot-testing/user:el_ninja.brain/time:'17:52:13')
+//feedback pleaaaase  (server:CHESS NOW/channel:bot-testing/user:el_ninja.brain/time:'17:52:20')
+//feedback Yo fix  (server:Servidor de Ninjapao pao/channel:mapbot-checker/user:el_ninja.brain/time:'19:43:42')

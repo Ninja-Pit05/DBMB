@@ -1,0 +1,3 @@
+faction:Frog Clan'$'color:N/A
+faction:Massive Manufacturing Machines'$'color:N/A
+faction:A'$'color:N/A

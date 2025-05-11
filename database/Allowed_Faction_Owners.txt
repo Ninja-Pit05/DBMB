@@ -1,0 +1,6 @@
+name:11lean'$'faction:Frog Clan
+name:_polarr_'$'faction:Massive Manufacturing Machines
+name:el_ninja.brain'$'faction:Bubu
+name:ricesquared'$'faction:Rocks.CO
+
+
