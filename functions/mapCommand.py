@@ -1,5 +1,7 @@
 # technically, it was edited on 2.0, but since all i did was put it into a function, I'll let it slide. and im not touching it for now...
-    
+from database.preliminaryData import cordStarList
+
+
 def gen_claimsMap():
     #1.6.2
     from urllib import request
