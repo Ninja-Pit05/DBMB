@@ -898,6 +898,7 @@ async def img_apply(ctx, droneW, droneH, toExclude):
 
 bot.run('')
 
+
 # trash that i keep here for some reason
 # these are "debug" and testing functions i use from time to time.
 
