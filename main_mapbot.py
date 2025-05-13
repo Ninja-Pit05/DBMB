@@ -8,6 +8,8 @@ from PIL import Image, ImageDraw, ImageFont
 import random
 from time import strftime, localtime
 import asyncio
+import numpy as np
+import re
 # Python imports
 
 # Our imports
@@ -18,7 +20,10 @@ from functions import god_action
 from functions import Functions
 from database import preliminaryData
 from database import changeLog
-
+from functions.Functions import getUpdatesChannels, triggeredSiegePings
+from functions.compareColors import compare_colors
+from functions.mapCommand import gen_claimsMap
+from database import imageData
 # Our imports
 
 
@@ -46,7 +51,7 @@ async def on_ready():
     print("\033[1;96mInitialized commands phase\033[0m")
 
     # on wake up map update
-    gen_map() if False else 0
+    gen_claimsMap() if False else 0
     print("-->Auto map update. '{}'".format(strftime("%H:%M:%S", localtime())))
 
 
@@ -884,16 +889,44 @@ async def image(ctx):
 
 @image.command("apply")
 async def img_apply(ctx, droneW, droneH, toExclude):
-    await ctx.send("This would be the output? no ideia.{} {} {}".format(droneW, droneH, toExclude))
+    await ctx.send(f"This would be the output? No idea. {droneW} {droneH} {toExclude}")
+
     if not ctx.message.attachments:
         await ctx.send("You didn't provide any file.")
-    else:
-        await ctx.channel.typing()
-        await ctx.message.attachments[0].save("outputs/temp_file_404.png")
+        return
 
-        # Do stuff
+    await ctx.channel.typing()
+    image_path = "outputs/temp_file_404.png"
+    await ctx.message.attachments[0].save(image_path)
 
-        await ctx.send("Aftermath:", file=discord.File("outputs/temp_file_404.png"))
+    # Load image
+    img = Image.open(image_path).convert("RGB")
+    pixels = np.array(img)
+    color_lines = re.findall(r"(\w+), (\d+), (\d+), (\d+), ([\w\s]+),", imageData.data)
+
+    color_palette = []
+    for block_type, r, g, b, name in color_lines:
+        color_palette.append({
+            "type": block_type,
+            "name": name.strip(),
+            "rgb": (int(r), int(g), int(b))
+        })
+
+    # Process image pixels
+    height, width = pixels.shape[:2]
+    matched_pixels = np.zeros((height, width, 3), dtype=np.uint8)
+
+    for y in range(height):
+        for x in range(width):
+            current_rgb = tuple(pixels[y, x])
+            closest_color = min(color_palette, key=lambda c: compare_colors(current_rgb, c["rgb"]))
+            matched_pixels[y, x] = closest_color["rgb"]
+
+    # Save processed image
+    processed_image = Image.fromarray(matched_pixels)
+    processed_image.save(image_path)
+
+    await ctx.send("Aftermath:", file=discord.File(image_path))
 
 
 bot.run('')
