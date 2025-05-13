@@ -1,4 +1,6 @@
 # version 2.0
+import json
+from datetime import datetime
 
 # Python imports
 from discord.ext import commands
@@ -883,50 +885,164 @@ async def sosAttendAccept(ctx, arg):
 # image generation by @a_person_that_exists1 (KaasKroket)
 @bot.group("image", invoke_without_command=True)
 async def image(ctx):
-    await ctx.send(
-        "Command tree 'image'\nA really cool function by @KaasKroket which generates images on DB given an image.\n```'//image apply (drone width) (drone height) (blocks to exclude)'\nGenerates an image.```")
+    return
 
 
+@image.command("help")
+async def send_help_message_image(ctx, arg: str = ""):
+    if arg == "": (
+        await ctx.send(
+            "# Command tree 'image'\nTwo really cool functions by **@KaasKroket** (aka Warden), one applies an image (**//image help apply**), and the other generates an image (**//image help generate**)"
+        )
+    )
+    elif arg == "apply": (
+        await ctx.send(
+            "```'//image apply (drone width) (drone height)'```**IMPORTANT** To use the command you need to attach an image and a .dbv file.\n\nTo get a processed drone in game, you should copy the folder that the bot outputs into your local drone folder. \nFor android users this folder should be at: ```Android/Data/com.rizenplanet.droneboiconquest/files/Vehicles```\nFor PC users (Windows) this folder should be located at: ```C:\\Users\\(your user)\\AppData\\LocalLow\\Rizen Planet Studios\\Droneboi_ Conquest\\Vehicles```\n You can do this by downloading it directly from the bot, it is formatted correctly so it should automatically work."
+        )
+    )
+    elif arg == "generate": (
+        await ctx.send(
+            "```'//image generate (drone width) (drone height) (drone name)'```**IMPORTANT** To use the command you need to attach an image.\n\nTo get a processed drone in game, you should copy the folder that the bot outputs into your local drone folder. \nFor android users this folder should be at: ```Android/Data/com.rizenplanet.droneboiconquest/files/Vehicles```\nFor PC users (Windows) this folder should be located at: ```C:\\Users\\(your user)\\AppData\\LocalLow\\Rizen Planet Studios\\Droneboi_ Conquest\\Vehicles```\n You can do this by downloading it directly from the bot, it is formatted correctly so it should automatically work."
+        )
+    )
 @image.command("apply")
-async def img_apply(ctx, droneW, droneH, toExclude):
-    await ctx.send(f"This would be the output? No idea. {droneW} {droneH} {toExclude}")
+async def img_apply_to_existing(ctx, droneW: int = 9, droneH: int = 13):
+    attachments = ctx.message.attachments
+    if len(attachments) < 2:
+        await ctx.send("Please attach both an image and a .dbv file.")
+        return
 
+    image_attachment = next((a for a in attachments if a.filename.lower().endswith((".png", ".jpg", ".jpeg"))), None)
+    dbv_attachment = next((a for a in attachments if a.filename.lower().endswith(".dbv")), None)
+
+    if not image_attachment or not dbv_attachment:
+        await ctx.send("Missing required image or .dbv file.")
+        return
+
+    await ctx.channel.typing()
+
+    image_path = "outputs/temp_image.png"
+    dbv_path = "outputs/input.dbv"
+    output_path = "outputs/updated_blocks.dbv"
+
+    await image_attachment.save(image_path)
+    await dbv_attachment.save(dbv_path)
+
+    img = Image.open(image_path).convert("RGB")
+    pixels = np.array(img)
+    img_height, img_width = pixels.shape[:2]
+
+    with open(dbv_path, "r") as f:
+        dbv_data = json.load(f)
+
+    color_lines = re.findall(r"([\w\s]+), (\d+), (\d+), (\d+), ([\w\s]+),", imageData.data)
+    palette_by_type = {"Armor Block": [], "Other": []}
+
+    for block_type, r, g, b, name in color_lines:
+        color_entry = {
+            "type": block_type.strip(),
+            "name": name.strip(),
+            "rgb": (int(r), int(g), int(b))
+        }
+        if block_type.strip() == "Armor Block":
+            palette_by_type["Armor Block"].append(color_entry)
+        else:
+            palette_by_type["Other"].append(color_entry)
+
+
+    virtualW = droneW * 2 + 0.5
+    virtualH = droneH * 2 + 0.5
+    step_x = img_width / virtualW
+    step_y = img_height / virtualH
+    for block in dbv_data["b"]:
+        px, py = block["p"]
+        grid_x = int((px + droneW / 2) * 2)
+        grid_y = int((-py + droneH / 2) * 2)
+
+        if 0 <= grid_x < virtualW and 0 <= grid_y < virtualH:
+            pixel_x = int(grid_x * step_x)
+            pixel_y = int(grid_y * step_y)
+            rgb = tuple(pixels[pixel_y, pixel_x])
+
+            palette = (
+                palette_by_type["Armor Block"]
+                if block["n"] == "Armor Block"
+                else palette_by_type["Other"]
+            )
+
+            if palette:
+                closest = min(palette, key=lambda c: compare_colors(rgb, c["rgb"]))
+                block["s"] = closest["name"]
+
+    with open(output_path, "w") as f:
+        json.dump(dbv_data, f, indent=4)
+
+    await ctx.send("Applied image onto your drone:", file=discord.File(output_path, filename="Applied drone.dbv"))
+
+@image.command("generate")
+async def img_generate(ctx, droneW: int, droneH: int, droneName: str):
     if not ctx.message.attachments:
-        await ctx.send("You didn't provide any file.")
+        await ctx.send("You didn't provide any image.")
         return
 
     await ctx.channel.typing()
     image_path = "outputs/temp_file_404.png"
+    dbv_path = "outputs/output_blocks.dbv"
     await ctx.message.attachments[0].save(image_path)
-
-    # Load image
     img = Image.open(image_path).convert("RGB")
     pixels = np.array(img)
-    color_lines = re.findall(r"(\w+), (\d+), (\d+), (\d+), ([\w\s]+),", imageData.data)
+    original_height, original_width = pixels.shape[:2]
+    from database import imageData
+    color_lines = re.findall(r"([\w\s]+), (\d+), (\d+), (\d+), ([\w\s]+),", imageData.data)
 
     color_palette = []
     for block_type, r, g, b, name in color_lines:
         color_palette.append({
-            "type": block_type,
+            "type": block_type.strip(),
             "name": name.strip(),
             "rgb": (int(r), int(g), int(b))
         })
+    step_x = original_width / droneW
+    step_y = original_height / droneH
 
-    # Process image pixels
-    height, width = pixels.shape[:2]
-    matched_pixels = np.zeros((height, width, 3), dtype=np.uint8)
+    blocks = []
+    for j in range(droneH):
+        y = int(j * step_y)
+        for i in range(droneW):
+            x = int(i * step_x)
+            rgb = tuple(pixels[y, x])
 
-    for y in range(height):
-        for x in range(width):
-            current_rgb = tuple(pixels[y, x])
-            closest_color = min(color_palette, key=lambda c: compare_colors(current_rgb, c["rgb"]))
-            matched_pixels[y, x] = closest_color["rgb"]
+            closest_color = min(color_palette, key=lambda c: compare_colors(rgb, c["rgb"]))
 
-    # Save processed image
-    processed_image = Image.fromarray(matched_pixels)
-    processed_image.save(image_path)
+            px = i - droneW // 2
+            py = j - droneH // 2
 
-    await ctx.send("Aftermath:", file=discord.File(image_path))
+            blocks.append({
+                "n": closest_color["type"],
+                "p": [float(px), float(py) * -1],
+                "r": 0,
+                "f": False,
+                "s": closest_color["name"],
+                "wg": 2,
+                "c": [],
+                "ni": []
+            })
+
+    full_output = {
+        "n": droneName,
+        "gv": "1.5.4",
+        "dt": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+        "ls": 0,
+        "b": blocks,
+        "nc": [],
+        "ci": []
+    }
+
+    with open(dbv_path, "w") as f:
+        json.dump(full_output, f, indent=4)
+
+    await ctx.send("Converted image to drone:",
+                   file=discord.File(dbv_path, filename=f"{droneName}.dbv"))
 
 
 bot.run('')
