@@ -1032,7 +1032,7 @@ async def img_generate(ctx, droneW: int, droneH: int, droneName: str):
         "n": droneName,
         "gv": "1.5.4",
         "dt": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-        "ls": 0,
+        "ls": 3,
         "b": blocks,
         "nc": [],
         "ci": []
