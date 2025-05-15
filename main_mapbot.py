@@ -1137,7 +1137,7 @@ async def image_ratio(ctx, dimension: str = None):
 
 
 
-bot.run('MTM3MTg4NjY1MjUwNjc2NzQwMQ.GGV7X3.ZQzcvmAgcEr3xRMb-opLj3Apmurov_eF8tHY0U')
+bot.run('')
 
 
 # trash that i keep here for some reason
