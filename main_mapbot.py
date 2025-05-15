@@ -1137,7 +1137,7 @@ async def image_ratio(ctx, dimension: str = None):
 
 
 
-bot.run('')
+bot.run('token')
 
 
 # trash that i keep here for some reason
