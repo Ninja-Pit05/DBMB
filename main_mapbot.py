@@ -35,7 +35,8 @@ bot = commands.Bot(command_prefix='//', intents=intents, help_command=None)
 
 
 BOT_OWNER_IDS = [
-
+    982591657130213406,
+    1195827600925405245,
 ]
 
 
@@ -1136,7 +1137,7 @@ async def image_ratio(ctx, dimension: str = None):
 
 
 
-bot.run(' ')
+bot.run('')
 
 
 # trash that i keep here for some reason
