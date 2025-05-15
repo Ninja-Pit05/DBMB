@@ -1,31 +1,29 @@
-# version 2.0
-import json
-from datetime import datetime
+# version 2.0 "last changed mai 15"
 
 # Python imports
 from discord.ext import commands
 import discord
-from urllib import request
-from PIL import Image, ImageDraw, ImageFont
 import random
 from time import strftime, localtime
 import asyncio
-import numpy as np
+#import numpy as np
 import re
+import json
+from datetime import datetime
 # Python imports
 
 # Our imports
 from assets import strings
+from database import preliminaryData
+from database import changeLog
+from database import imageData
 from functions import mapCommand
 from functions import faction_color
 from functions import god_action
 from functions import Functions
-from database import preliminaryData
-from database import changeLog
 from functions.Functions import getUpdatesChannels, triggeredSiegePings
-from functions.compareColors import compare_colors
+#from functions.compareColors import compare_colors
 from functions.mapCommand import gen_claimsMap
-from database import imageData
 # Our imports
 
 
@@ -68,7 +66,7 @@ async def on_message(message):
             1326217953326141521):
         await message.channel.send('Updating map...')
         print("-->Conquest Log got an update")
-        with open("mapCommand.py") as file: exec(file.read())
+        mapCommand.gen_claimsMap()
         print("<--Map updated {} (auto)".format(strftime("%H:%M:%S", localtime())))
         await message.channel.send('Map updated.')
 
@@ -184,7 +182,7 @@ async def map(ctx):
         mapCommand.gen_claimsMap()
         await ctx.send('Map was updated successfuly!')
         print("<--Map was successfully updated {} (manual)".format(strftime("%H:%M:%S", localtime())))
-    elif ctx.message.content == ('//map'):
+    else:
         print("-->Map command received" + get_info(ctx))
         await ctx.send('Actual Droneboi Map:')
         await ctx.send(file=discord.File('outputs/claimsMap.png'))
@@ -204,32 +202,33 @@ async def new(ctx):
     print("-->New command received" + get_info(ctx))
 
 
-# faction color command
-@bot.command('faction')
+# faction tree. Changes faction color claims.
+@bot.group('faction',invoke_without_command=True)
 async def faction(ctx):
-    message = (ctx.message.content)
-    print("-->faction command received" + get_info(ctx))
-    # Set color part
-    if message[:20] == "//faction color set ":
-        if len(message) == 29:
-            if faction_color.get_faction(ctx.message.author.name) == "None":
-                await ctx.send(
-                    "You're not allowed to change faction colors in any faction. To be added to the whitelist, ask your faction leader to dm Ninja")
-                print("<--User not allowed '{}' for faction set color command".format(ctx.message.author.name))
-            else:
-                try:
-                    await ctx.send(faction_color.edit_color(faction_color.get_faction(ctx.message.author),
-                                                            ctx.message.content[21:-1]))
-                    print("<--User '{}' tried change '{}' color to '{}'.".format(ctx.message.author.name,
-                                                                                 faction_color.get_faction(
-                                                                                     ctx.message.author)[:-1],
-                                                                                 ctx.message.content[21:-1]))
-                except Exception as ex:
-                    await ctx.send("Uh... I ran into some internal errors. Please contact my creator.   :{}".format(ex))
+    ctx.send('### Faction Command Tree. ```faction command\n\n//faction color set "{Hex code}" - edit faction custom color\n     Hex code format should be "#rrggbb"\n     Example: "//faction color set "#ffffff""\n\n//faction color get - return faction colors value.```')
+
+@faction.command('color')
+async def faction_color(ctx, *arg):
+    #set mode
+    if arg[0] == "set":
+        #checks HEX code vality
+        if len(arg[1]) != 7:
+            await ctx.send("Invalid HEX code.\nHEX format should be `#rrggbb`")
+            return
+        #checks if is on the whitelist
+        if faction_color.get_faction(ctx.message.author.name) == "None":
+            await ctx.send("You're not allowed to change faction colors in any faction. To be added to the whitelist, ask your faction leader to contact Ninja")
         else:
-            await ctx.send('Invalid command. Command format should be: //faction color set "#rrggbb"')
-    # get part
-    elif message[:19] == "//faction color get":
+            #try to change color.
+            try:
+                await ctx.send(faction_color.edit_color(faction_color.get_faction(ctx.message.author),arg[1]))
+                print("--> Faction cmd. Color changed successfuly! {}".format(get_info(ctx)))
+            except Exception as Exp:
+                await ctx.send("I ran into some internal erros. Please contact my creator.")
+                print("\033[31m ERROR! Exception at 'faction color set' : {}".format(Exp), "\033[0m" )
+    #get mode
+    elif arg[0] == "get":
+        #opens database, caches each faction/color pair, then outputs it.
         with open("database/custom_faction_colors.txt") as file:
             String = "```"
             for line in file:
@@ -238,11 +237,9 @@ async def faction(ctx):
         String += "```"
         await ctx.send(String)
         del String
-        print("<--It was a get color command")
-
+        print("--> Faction cmd. Color pairs outputed! {}".format(get_info(ctx)))
     else:
-        await ctx.send(
-            '```faction command\n\n//faction color set "{Hex code}" - edit faction custom color\n     Hex code format should be "#rrggbb"\n     Example: "//faction color set "#ffffff""\n\n//faction color get - return faction colors value.```')
+        ctx.send("Invalid argument.")
 
 
 # just print my name.
@@ -282,7 +279,6 @@ async def leaderboard(ctx):
     print('-->Leaderboard command was used - ' + get_info(ctx))
     await ctx.send("Here is the leaderboard:\n```" + Functions.get_leadership_board() + "```")
 
-
 @bot.command('lb')
 async def lb_short(ctx):
     await leaderboard(ctx)
@@ -291,10 +287,14 @@ async def lb_short(ctx):
 # crystals command
 @bot.command('crystal')
 async def crystals(ctx):
-    print('-->Crystals command received - ' + get_info(ctx))
+    print('--> Crystal command received - ' + get_info(ctx))
     Functions.crystalsLocationMap().save('outputs/CrystalsLocationMap.png')
     await ctx.send('Here is where you can find and buy rift crystals:')
     await ctx.send(file=discord.File('outputs/CrystalsLocationMap.png'))
+
+@bot.command('crystals')
+async def crystalls(ctx):
+    await crystals(ctx)
 
 
 ##Fun Commands!
@@ -318,140 +318,157 @@ async def duck(ctx):
         await ctx.send(file=discord.File('duck/cat' + str(fileNumber) + '.gif'))
     else:
         await ctx.send(file=discord.File('duck/cat' + str(fileNumber) + '.png'))
+#No fun anymore!
 
 
-# market related command
-@bot.command('market')
-async def maket(ctx):
-    if ctx.message.content in ['//market', '//market ']:
-        await ctx.send(
-            'This is the market command.```//market map - Shows a map containing all market types.\n//market get {item name} - Shows a map with the locations to buy and sell the item specified. "//market get" for more info.\n//market info {market name} - Item list that you can buy and sell in that market type. "//market info" for details.```')
-    elif ctx.message.content.startswith('//market type map') or ctx.message.content.startswith('//market map'):
-        Functions.marketsTypeMap().save('outputs/MarketTypes.png')
-        print('-->Market Type Map command received - ' + get_info(ctx))
-        await ctx.send('Market map:')
-        await ctx.send(file=discord.File('outputs/MarketTypes.png'))
-    elif ctx.message.content in ['//market get', '//market get ']:
-        await ctx.send(
-            'This is the "`//market get {item name}`" command. Use this command to get a map showing stars that sell and buy specified item.\n Use "`//market get minerals`" to see all the stars that buy rock, iron, gold and titanium.\n Use "`//market get Rift Crystal`" or "`//crystal`" to see all stars that sell Rift Crystals.')
-    elif ctx.message.content == '//market get minerals':
+#market tree
+@bot.group('market',invoke_without_command=True)
+async def market(ctx):
+    await ctx.send('### Market Command Tree.```//market map - Shows a map containing all market types.\n//market get {item name} - Shows a map with the locations to buy and sell the item specified. "//market get" for more info.\n//market info {market name} - Item list that you can buy and sell in that market type. "//market info" for details.```')
+
+#cmd: market map
+@market.command('map')
+async def market_map(ctx):
+    #Gen then caches.
+    Functions.marketsTypeMap().save('outputs/MarketTypes.png')
+    print('-->Market Type Map command received - ' + get_info(ctx))
+    await ctx.send('Market map:')
+    await ctx.send(file=discord.File('outputs/MarketTypes.png'))
+
+#cmd: market type map
+@market.command('type')
+async def market_type_map(ctx, arg):
+    if arg == "map":
+        #this was the intended way, the other one that is actually the shortcut.
+        await market_map(ctx)
+
+#cmd: market get {item}
+@market.command('get')
+async def market_get(ctx, arg=None):
+    if arg == None:
+        await ctx.send( 'This is the "`//market get {item name}`" command. Use this command to get a map showing stars that sell and buy specified item.\n Use "`//market get minerals`" to see all the stars that buy rock, iron, gold and titanium.\n Use "`//market get Rift Crystal`" or "`//crystal`" (shortcut) to see all stars that sell Rift Crystals.')
+    elif arg == "minerals":
         Functions.marketGetItem(ctx.message.content).save('outputs/marketGet.png')
         print('-->Minerals Location Command Received - ' + get_info(ctx))
         await ctx.send("Minerals can be found:", file=discord.File('outputs/marketGet.png'))
-    elif ctx.message.content.startswith('//market get '):
+    else:
         resultado = Functions.marketGetItem(ctx.message.content)
         if resultado == None:
             await ctx.send('Item could not be found.')
         else:
-            print('-->cmd Market get ' + ctx.message.content[13:] + ' - ' + get_info(ctx))
+            print('--> Market get cmd {{}}. {} ' + ctx.message.content[13:] + ' - ' + get_info(ctx))
             resultado.save('outputs/marketGet.png')
             await ctx.send("Item can be found:", file=discord.File('outputs/marketGet.png'))
         del resultado
-    elif ctx.message.content == '//market info':
-        print('-->Market info - ' + get_info(ctx))
-        stringa = 'Possible commands:\n'
+
+#cmd: market info {market type}
+@market.command("info")
+async def market_info(ctx,arg=None):
+    #if empty
+    if arg == None:
+        stringa="### Market info command. Uses:\n"
         for key in preliminaryData.allMarkets:
             stringa += '`//market info {}`\n'.format(key)
         await ctx.send(stringa)
-    elif ctx.message.content.startswith('//market info '):
-        if ctx.message.content[14:] in preliminaryData.allMarkets.keys() or ctx.message.content[14:] in ['refinery',
-                                                                                                         'agriculture',
-                                                                                                         'military',
-                                                                                                         'tech',
-                                                                                                         'tourism',
-                                                                                                         'industrial']:
-            await ctx.send(ctx.message.content[14:] + ":\n" + Functions.getMarketTable(ctx.message.content[14:]))
-            print('-->Market info about ' + ctx.message.content[14:] + ' - ' + get_info(ctx))
-        else:
-            await ctx.send('Invalid market type. Have you tried "refinery", "agriculture" or "tourismMarket"?')
+    #if type exists
+    elif arg in preliminaryData.allMarkets.keys() or arg in ['refinery', 'agriculture' ,'military', 'tech', 'tourism', 'industrial']:
+        #return market type table
+        await ctx.send(arg+ ":\n" + Functions.getMarketTable(arg))
+        print('-->Market info about ' + arg + ' - ' + get_info(ctx))
+    #if invalid
     else:
-        await ctx.send('Invalid command.')
+        await ctx.send("Invalid command.\nHave u tried `tourismMarket` or `tech`?")
 
 
-# auto map update channel set
-@bot.command('set-update')
-async def setChannelUpdates(ctx):
-    if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and ctx.message.content == "//set-update n":
+#automatic map updates tree.
+@bot.group('auto',invoke_without_command=True)
+async def auto(ctx):
+    await ctx.send("### Automatic Claims Map Updates command tree.\n'`auto map`' for short.\n'`auto map help`' for more details.")
+
+#other half of the command syntax
+@auto.group('map',invoke_without_command=True)
+async def auto_map(ctx):
+    await ctx.send("### Automatic Claims Map Updates command tree.\n'`auto map`' for short.\n'`auto map help`' for more details.")
+
+#auto map set
+@auto_map.command('set')
+async def auto_map_set(ctx, *arg):
+    if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and arg[0] == "n":
         try:
             await ctx.send(Functions.setUpdateChannel(ctx))
-            print("--> set update channel command received!" + get_info(ctx))
+            print("--> auto map set command received!" + get_info(ctx))
         except:
             await ctx.send("Error... I feel like... something inside me is broken")
             print("--> \033[31m an ERROR ocurred while executing the command set-update.\033[0m")
     else:
         await ctx.send("You must be an ADMIN to set a channel for auto updates.")
 
-
-# auto map update, channel check
-@bot.command('test-update')
-async def checkChannelUpdates(ctx):
-    if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and ctx.message.content == "//test-update n":
-        print("--> test update channel command received!" + get_info(ctx))
-        if Functions.getUpdatesChannel(ctx) == None:
-            await ctx.send("There's no Channel defined to get auto updates on this server.")
-        else:
-            channel = (bot.get_channel(int(Functions.getUpdatesChannel(ctx))) or bot.fetch_channel(
-                int(Functions.getUpdatesChannel(ctx))))
-            await channel.send("<@{}> This channel will receive auto map updates!".format(ctx.author.id))
-    else:
-        await ctx.send("You must be an ADMIN to use this command.")
-
-
-# get the channel that gets auto updates
-@bot.command('get-update')
-async def checkChannelUpdates(ctx):
-    print("--> get update channel command received!" + get_info(ctx))
+#auto map get
+@auto_map.command('get')
+async def auto_map_get(ctx):
+    print("--> auto map get command received!" + get_info(ctx))
     if Functions.getUpdatesChannel(ctx) == None:
         await ctx.send("There's no Channel defined to get auto updates on this server.")
     else:
         channel = (int(Functions.getUpdatesChannel(ctx)))
         await ctx.send(
-            "The https://discord.com/channels/{}/{} channel will receive auto map updates!".format(ctx.guild.id,
-                                                                                                   channel))
+            "The https://discord.com/channels/{}/{} channel will receive auto map updates!".format(ctx.guild.id,channel))
 
+#auto map test
+@auto_map.command('test')
+async def auto_map_test(ctx, *arg):
+    if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and arg[0] == 'n':
+        print("--> auto map test command received!" + get_info(ctx))
+        if Functions.getUpdatesChannel(ctx) == None:
+            await ctx.send("There's no Channel defined to get auto updates on this server.")
+        else:
+            channel = (bot.get_channel(int(Functions.getUpdatesChannel(ctx))) or bot.fetch_channel(int(Functions.getUpdatesChannel(ctx))))
+            await channel.send("<@{}> This channel will receive auto map updates!".format(ctx.author.id))
+    else:
+        await ctx.send("You must be an ADMIN to use this command.")
 
-# help for set-update related commands
-@bot.command('help-update')
-async def help_update(ctx):
+#auto map help
+@auto_map.command('help')
+async def auto_map_help(ctx):
     await ctx.send(strings.help_update)
 
 
-# change log command
+# change logs cmd
 @bot.command('change-log')
-async def change_log(ctx, arg=None):
-    print("--> Accessed change log" + get_info(ctx))
-    if arg == None:
-        await ctx.send(
-            "This is the change log command. You can see all past updates and improvements trough `'//change-log <arg>'` where arg is a number or a list of numbers.\n\nExamples: `//change-log 0`, `//change-log 2,3,4,7`\nYou can also gather all change logs passing 'all' as the argument. Be aware that it will return *all* of them.")
-    await ctx.send("DB Map bot - Change Log:")
-    try:
-        if int(arg) > len(changeLog.change_list) - 1:
-            await ctx.send("Too big. Max:{}".format(len(changeLog.change_list) - 1))
-        else:
-            await ctx.send(changeLog.change_list[int(arg)])
-    except Exception as e:
-        try:
-            for num in arg.split(","):
-                await ctx.send(changeLog.change_list[int(num)])
-        except Exception as es:
+async def change_log(ctx, *arg):
+    #help if empty
+    if not arg:
+        await ctx.send("### Change Log Command.\nUsed to see all past changes and improvements.\nSyntax: '//change-log <arg>'\nExamples: '`//change-log 0`', '`//change-log 2 3 4 7`'.\nYou can also gather everything using `all` as argument. Be aware that it will return *all* of them.")
+    #print every single one if all
+    elif arg[0] == "all":
+        for log in changeLog.change_list:
+            await ctx.send(log)
+            await asyncio.sleep(0.5)
+    #checks if valid and handles each output
+    else:
+        await ctx.send("Change Log:")
+        print("--> Change Log Cmd {} {}".format(arg,get_info(ctx)))
+        for i in arg:
             try:
-                if arg == "all":
-                    for log in changeLog.change_list:
-                        await ctx.send(log)
-                        await asyncio.sleep(0.5)
+                int(i)
+                if int(i) <= len(changeLog.change_list)-1:
+                    try: await ctx.send(changeLog.change_list[int(i)])
+                    except Exception as Exp:
+                        await ctx.send("Error. Probably invalid argument `{}`".format(i))
+                        print("\033[91mError on //change-log:",Exp,"\033[0m")
                 else:
-                    print("\033[31m", e, es, "\033[0m")
-                    await ctx.send("Invalid argument.")
-            except Exception as et:
-                print("\033[31m", e, es, et, "\033[0m")
-                await ctx.send("Invalid argument.")
+                    await ctx.send("Argument is too big. Max is `{}`".format(len(changeLog.change_list)-1))
+            except Exception as Exp:
+                    await ctx.send("Invalid argument `{}`".format(i))
+                    print("\033[91mError on //change-log:",Exp,"\033[0m")
 
+#maybe add other way to call change logs?
+                    
 
-# Branch of code that handles siege pings. I took a diferent approach and used groups and subgroups instead of the previous approach of evaluating message content.
+# Siege Pings Cmd
 @bot.group('siege-ping', invoke_without_command=True)
 async def siege_pings(ctx):
     await ctx.send(strings.siege_ping)
-
 
 # test command
 @siege_pings.command("test")
@@ -460,7 +477,7 @@ async def siege_test(ctx, *arg):
         try:
             pchannel = Functions.getSiegePingChannel(ctx)
             if pchannel == "Err:1":
-                await ctx.send("Guild inexistent. Use //siege-ping set channel first.")
+                await ctx.send("Guild inexistent. Use '`//siege-ping set channel`' first.")
             else:
                 pchannel = bot.get_channel(int(pchannel))
                 try:
@@ -488,7 +505,7 @@ async def siege_set(ctx):
 @siege_set.command('channel')
 async def siege_set_channel(ctx, *arg):
     if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and "n" in arg:
-        if len(arg) == 0:
+        if not arg:
             await ctx.send(
                 "Here you should send a `channel ID` to receive siege pings. Or send `here` to use currently channel.")
         else:
@@ -570,7 +587,7 @@ async def siege_add(ctx):
 @siege_add.command('id')
 async def siege_add_id(ctx, *arg):
     if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and "n" in arg:
-        if len(arg) == 0:
+        if not arg:
             await ctx.send(
                 "Here you shoud send user's or role's ids to receive pings. When adding a role's id, add a `&` just before the id.")
         else:
@@ -617,7 +634,7 @@ async def siege_add_id(ctx, *arg):
 @siege_add.command('faction')
 async def siege_add_faction(ctx, *arg):
     if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and "n" in arg:
-        if len(arg) == 0:
+        if not arg:
             await ctx.send(
                 'Here you should send a full in-game faction name to trigger pings. If the faction name has spaces, put it between "". Can be yours, your allie, even your enemie. Add one at a time.\n For intance: "Frog", Frog, Star, "Star" or "Massive Manufacturing Machines" will work.')
         else:
@@ -649,9 +666,9 @@ async def siege_del(ctx):
 @siege_del.command('id')
 async def siege_del_id(ctx, *arg):
     if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and "n" in arg:
-        if len(arg) == 0:
+        if not arg:
             await ctx.send(
-                "Here you shoud send user's or role's ids to delete. When adding a role's id, add a `&` just before the id.")
+                "Here you shoud send user's or role's ids to delete. When deleting a role's id, add a `&` just before the id.")
         else:
             try:
                 res = Functions.delSiegePingId(ctx, arg[0])
@@ -674,7 +691,7 @@ async def siege_del_id(ctx, *arg):
 @siege_del.command('faction')
 async def siege_del_faction(ctx, *arg):
     if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and "n" in arg:
-        if len(arg) == 0:
+        if not arg:
             await ctx.send(
                 'Here you should send the faction name. If the faction name has spaces, put it between "". Del one at a time.\n For intance: "frog clan", Star, "Star" or "Massive Manufacturing Machines" will work.')
         else:
@@ -1045,7 +1062,7 @@ async def img_generate(ctx, droneW: int, droneH: int, droneName: str):
                    file=discord.File(dbv_path, filename=f"{droneName}.dbv"))
 
 
-bot.run('')
+bot.run('token')
 
 
 # trash that i keep here for some reason
