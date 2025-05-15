@@ -1,12 +1,12 @@
 # version 2.0 "last changed mai 15"
-
+from PIL import Image
 # Python imports
 from discord.ext import commands
 import discord
 import random
 from time import strftime, localtime
 import asyncio
-#import numpy as np
+import numpy as np
 import re
 import json
 from datetime import datetime
@@ -22,7 +22,7 @@ from functions import faction_color
 from functions import god_action
 from functions import Functions
 from functions.Functions import getUpdatesChannels, triggeredSiegePings
-#from functions.compareColors import compare_colors
+from functions.compareColors import compare_colors
 from functions.mapCommand import gen_claimsMap
 # Our imports
 
@@ -32,6 +32,12 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix='//', intents=intents, help_command=None)
+
+
+BOT_OWNER_IDS = [
+    982591657130213406,
+    1195827600925405245,
+]
 
 
 # function to get context info
@@ -463,7 +469,7 @@ async def change_log(ctx, *arg):
                     print("\033[91mError on //change-log:",Exp,"\033[0m")
 
 #maybe add other way to call change logs?
-                    
+
 
 # Siege Pings Cmd
 @bot.group('siege-ping', invoke_without_command=True)
@@ -900,7 +906,7 @@ async def sosAttendAccept(ctx, arg):
 
 
 # image generation by @a_person_that_exists1 (KaasKroket)
-@bot.group("image", invoke_without_command=True)
+@bot.group("image", aliases=["im"],invoke_without_command=True)
 async def image(ctx):
     return
 
@@ -920,6 +926,11 @@ async def send_help_message_image(ctx, arg: str = ""):
     elif arg == "generate": (
         await ctx.send(
             "```'//image generate (drone width) (drone height) (drone name)'```**IMPORTANT** To use the command you need to attach an image.\n\nTo get a processed drone in game, you should copy the folder that the bot outputs into your local drone folder. \nFor android users this folder should be at: ```Android/Data/com.rizenplanet.droneboiconquest/files/Vehicles```\nFor PC users (Windows) this folder should be located at: ```C:\\Users\\(your user)\\AppData\\LocalLow\\Rizen Planet Studios\\Droneboi_ Conquest\\Vehicles```\n You can do this by downloading it directly from the bot, it is formatted correctly so it should automatically work."
+        )
+    )
+    elif arg == "ratio": (
+        await ctx.send(
+            "```'//image ratio (desired width or height by typing w10 or h10)'```**IMPORTANT** To use the command you need to attach an image.\n\nThis outputs the image size, ratio, and the matching image width or height with the input."
         )
     )
 @image.command("apply")
@@ -992,43 +1003,54 @@ async def img_apply_to_existing(ctx, droneW: int = 9, droneH: int = 13):
                 block["s"] = closest["name"]
 
     with open(output_path, "w") as f:
-        json.dump(dbv_data, f, indent=4)
+        json.dump(dbv_data, f, separators=(",", ":"))
 
     await ctx.send("Applied image onto your drone:", file=discord.File(output_path, filename="Applied drone.dbv"))
 
 @image.command("generate")
 async def img_generate(ctx, droneW: int, droneH: int, droneName: str):
-    if not ctx.message.attachments:
+    if (droneW > 500 or droneH > 500):
+        if not(ctx.author.id in BOT_OWNER_IDS) :
+            await ctx.send("Too large size, request denied when greater then 500 blocks.")
+            return
+
+    image_path = "outputs/temp_file_404.png"
+    dbv_path = "outputs/output_blocks.dbv"
+    attachment = None
+
+    if ctx.message.attachments:
+        attachment = ctx.message.attachments[0]
+    elif ctx.message.reference:
+        replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+        if replied_message.attachments:
+            attachment = replied_message.attachments[0]
+
+    if not attachment:
         await ctx.send("You didn't provide any image.")
         return
 
     await ctx.channel.typing()
-    image_path = "outputs/temp_file_404.png"
-    dbv_path = "outputs/output_blocks.dbv"
-    await ctx.message.attachments[0].save(image_path)
-    img = Image.open(image_path).convert("RGB")
-    pixels = np.array(img)
-    original_height, original_width = pixels.shape[:2]
-    from database import imageData
-    color_lines = re.findall(r"([\w\s]+), (\d+), (\d+), (\d+), ([\w\s]+),", imageData.data)
+    await attachment.save(image_path)
 
-    color_palette = []
-    for block_type, r, g, b, name in color_lines:
-        color_palette.append({
-            "type": block_type.strip(),
-            "name": name.strip(),
-            "rgb": (int(r), int(g), int(b))
-        })
-    step_x = original_width / droneW
-    step_y = original_height / droneH
+    img = Image.open(image_path).convert("RGBA")
+    img_resized = img.resize((droneW, droneH), resample=Image.BILINEAR)
+    pixels = np.array(img_resized)
+
+    color_lines = re.findall(r"([\w\s]+), (\d+), (\d+), (\d+), ([\w\s]+),", imageData.data)
+    color_palette = [{
+        "type": block_type.strip(),
+        "name": name.strip(),
+        "rgb": (int(r), int(g), int(b))
+    } for block_type, r, g, b, name in color_lines]
 
     blocks = []
     for j in range(droneH):
-        y = int(j * step_y)
         for i in range(droneW):
-            x = int(i * step_x)
-            rgb = tuple(pixels[y, x])
+            r, g, b, a = pixels[j, i]
+            if a == 0:
+                continue
 
+            rgb = (r, g, b)
             closest_color = min(color_palette, key=lambda c: compare_colors(rgb, c["rgb"]))
 
             px = i - droneW // 2
@@ -1040,29 +1062,82 @@ async def img_generate(ctx, droneW: int, droneH: int, droneName: str):
                 "r": 0,
                 "f": False,
                 "s": closest_color["name"],
-                "wg": 2,
+                "wg": 3,
                 "c": [],
                 "ni": []
             })
 
+    ls_value = 3 if ctx.author.id in BOT_OWNER_IDS else 2
     full_output = {
         "n": droneName,
         "gv": "1.5.4",
         "dt": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-        "ls": 3,
+        "ls": ls_value,
         "b": blocks,
         "nc": [],
         "ci": []
     }
 
     with open(dbv_path, "w") as f:
-        json.dump(full_output, f, indent=4)
+        json.dump(full_output, f, separators=(",", ":"))
 
-    await ctx.send("Converted image to drone:",
-                   file=discord.File(dbv_path, filename=f"{droneName}.dbv"))
+    await ctx.send("Converted image to drone:", file=discord.File(dbv_path, filename=f"{droneName}.dbv"))
 
 
-bot.run('token')
+
+@image.command("ratio")
+async def image_ratio(ctx, dimension: str = None):
+    import discord
+    from PIL import Image
+    from math import gcd
+
+    image_path = "outputs/temp_ratio_check.png"
+
+    attachment = None
+    if ctx.message.attachments:
+        attachment = ctx.message.attachments[0]
+    elif ctx.message.reference:
+        replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+        if replied_message.attachments:
+            attachment = replied_message.attachments[0]
+
+    if not attachment:
+        await ctx.send("You didn't provide any image.")
+        return
+
+    await ctx.channel.typing()
+    await attachment.save(image_path)
+
+    img = Image.open(image_path)
+    width, height = img.size
+    divisor = gcd(width, height)
+    simple_width = width // divisor
+    simple_height = height // divisor
+
+    response = f"Image size: `{width}x{height}`\nAspect ratio: `{simple_width}:{simple_height}`"
+
+    if dimension:
+        try:
+            if dimension.lower().startswith("w"):
+                target_width = float(dimension[1:])
+                calc_height = round((target_width * height) / width, 2)
+                response += f"\nIf the drone width = `{target_width}`, the drone height should be `{calc_height}`"
+            elif dimension.lower().startswith("h"):
+                target_height = float(dimension[1:])
+                calc_width = round((target_height * width) / height, 2)
+                response += f"\nIf the drone height = `{target_height}`, the drone width should be `{calc_width}`"
+            else:
+                response += "\nInvalid format. Use `w<number>` or `h<number>`."
+        except ValueError:
+            response += "\nInvalid number format. Use something like `w10` or `h25`."
+
+    await ctx.send(response)
+
+
+
+
+
+bot.run('MTM3MTg4NjY1MjUwNjc2NzQwMQ.GGV7X3.ZQzcvmAgcEr3xRMb-opLj3Apmurov_eF8tHY0U')
 
 
 # trash that i keep here for some reason
