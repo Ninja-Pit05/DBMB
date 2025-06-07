@@ -1,4 +1,4 @@
-# version 2.0 "last changed mai 15"
+# version 2.0 "7 jun"
 from PIL import Image
 # Python imports
 from discord.ext import commands
