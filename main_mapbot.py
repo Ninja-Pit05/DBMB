@@ -1320,7 +1320,7 @@ async def analyHot(ctx,amount=30,sensibility=1.0):
     if check_ephemeral(ctx): return
     ephe = isEph(ctx)
     #ephe check
-    if amount>100:
+    if amount>100 and ctx.author.id!=1195827600925405245:
         await ctx.send("Too High! Max of ***100***",ephemeral=ephe)
         return
     await ctx.send("*Producing heatmap for the last **{}** sieges...*  \n-# *Sensibility {}*".format(amount, sensibility),ephemeral=ephe)
