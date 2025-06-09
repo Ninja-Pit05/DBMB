@@ -6,7 +6,7 @@ import discord
 import random
 from time import strftime, localtime
 import asyncio
-#!#import numpy as np
+import numpy as np
 import re
 import json
 from datetime import datetime
@@ -22,7 +22,7 @@ from functions import faction_color
 from functions import god_action
 from functions import Functions
 from functions.Functions import getUpdatesChannels, triggeredSiegePings
-#!#from functions.compareColors import compare_colors
+from functions.compareColors import compare_colors
 from functions.mapCommand import gen_claimsMap
 from functions import claimAnalysis
 # Our imports
