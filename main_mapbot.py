@@ -1323,6 +1323,9 @@ async def analyHot(ctx,amount=30,sensibility=1.0):
     if amount>100 and ctx.author.id!=1195827600925405245:
         await ctx.send("Too High! Max of ***100***",ephemeral=ephe)
         return
+    if sensibility>10 and ctx.author.id!=1195827600925405245:
+        await ctx.send("Too High! Max of ***10***",ephemeral=ephe)
+        return
     await ctx.send("*Producing heatmap for the last **{}** sieges...*  \n-# *Sensibility {}*".format(amount, sensibility),ephemeral=ephe)
     print("--> HeatMap",get_info(ctx))
     #get messages
