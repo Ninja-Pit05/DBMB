@@ -111,7 +111,7 @@ async def on_message(message):
                     embed = fetchedMes.embeds
                     await channel.send("**{}** successfully sieged **{}** taking the station from **{}**".format(
                         embed[0].fields[3].value, embed[0].fields[1].value, embed[0].fields[2].value),
-                        file=discord.File('assets/claimsMap.png'))
+                        file=discord.File('outputs/claimsMap.png'))
                     # one less item on the list.
                     toUpdateChannelList.pop(toUpdateChannelList.index(channel_id))
                 except Exception as Ex:
