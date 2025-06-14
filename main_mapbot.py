@@ -3,6 +3,8 @@ from PIL import Image
 # Python imports
 from discord.ext import commands
 import discord
+import signal
+import os
 import random
 from time import strftime, localtime
 import asyncio
@@ -1386,8 +1388,17 @@ async def shutdown(ctx):
         print(get_info(ctx))
         await bot.close()
 
-bot.run('')
+# Signal handling for graceful shutdown
+async def shutdown_signal():
+    print("Signal received, shutting down...")
+    await bot.close()
+def handle_signal():
+    asyncio.create_task(shutdown_signal())
+# Register signal handlers
+signal.signal(signal.SIGINT, lambda *_: handle_signal())
+signal.signal(signal.SIGTERM, lambda *_: handle_signal())
 
+bot.run(os.getenv('DISCORD_BOT_TOKEN'))  # Make sure to set the token in the environment variable DISCORD_TOKEN
 
 # trash that i keep here for some reason
 # these are "debug" and testing functions i use from time to time.
