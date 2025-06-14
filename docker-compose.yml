@@ -1,0 +1,25 @@
+services:
+  discord-bot:
+    build: ./ # Bot
+    restart: unless-stopped
+    depends_on:
+      - filebrowser
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+    volumes:
+    - database:/app/database
+
+  filebrowser:
+    image: filebrowser/filebrowser
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - database:/srv
+      - filebrowser.db:/database.db \
+      - .filebrowser.json:/.filebrowser.json \
+
+volumes:
+  filebrowser.db:
+  .filebrowser.json:
+  database: #  This is the volume for the bot's database

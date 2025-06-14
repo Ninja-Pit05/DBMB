@@ -1,0 +1,4 @@
+Pillow
+discord.py
+numpy
+asyncio
