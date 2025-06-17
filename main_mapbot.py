@@ -1300,7 +1300,7 @@ async def analyBoard(ctx,amount=20,type='overview'):
     ephe = isEph(ctx)
     #ephe check
     #cancel id too high
-    if not ctx.author.id == 1195827600925405245 and amount > 500:
+    if not ctx.author.id in BOT_OWNER_IDS the and amount > 100:
         await ctx.send("### Too High!\nLimited at *100* messages.",ephemeral=ephe)
         return
     
