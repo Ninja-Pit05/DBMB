@@ -1152,11 +1152,11 @@ async def img_apply_to_existing(ctx, droneW: int = 9, droneH: int = 13):
 @image.command("generate")
 async def img_generate(ctx, droneW: int, droneH: int, droneName: str):
     if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
+        await ctx.send("This command is not compatible with ephemeral mode.", delete_after=3)
         return
     #^^ Ephemeral mode check
     if (droneW > 500 or droneH > 500):
-        if not(ctx.author.id in BOT_OWNER_IDS) :
+        if not(ctx.author.id in BOT_OWNER_IDS):
             await ctx.send("Too large size, request denied when greater then 500 blocks.")
             return
 
@@ -1196,24 +1196,36 @@ async def img_generate(ctx, droneW: int, droneH: int, droneName: str):
             if a == 0:
                 continue
 
-            rgb = (r, g, b)
-            closest_color = min(color_palette, key=lambda c: compare_colors(rgb, c["rgb"]))
-
             px = i - droneW // 2
             py = j - droneH // 2
+            if px == 0 and py == 0:
+                rgb = (r, g, b)
+                closest_color = min(color_palette, key=lambda c: compare_colors(rgb, c["rgb"]))
+                blocks.append({
+                    "n": "Core",
+                    "p": [float(px), float(py) * -1],
+                    "r": 0,
+                    "f": False,
+                    "s": closest_color["name"],
+                    "wg": 3,
+                    "c": [],
+                    "ni": []
+                })
+            else:
+                rgb = (r, g, b)
+                closest_color = min(color_palette, key=lambda c: compare_colors(rgb, c["rgb"]))
+                blocks.append({
+                    "n": closest_color["type"],
+                    "p": [float(px), float(py) * -1],
+                    "r": 0,
+                    "f": False,
+                    "s": closest_color["name"],
+                    "wg": 3,
+                    "c": [],
+                    "ni": []
+                })
 
-            blocks.append({
-                "n": closest_color["type"],
-                "p": [float(px), float(py) * -1],
-                "r": 0,
-                "f": False,
-                "s": closest_color["name"],
-                "wg": 3,
-                "c": [],
-                "ni": []
-            })
-
-    ls_value = 3 if ctx.author.id in BOT_OWNER_IDS else 2
+    ls_value = 0 if ctx.author.id in BOT_OWNER_IDS else 2
     full_output = {
         "n": droneName,
         "gv": "1.5.4",
@@ -1300,7 +1312,7 @@ async def analyBoard(ctx,amount=20,type='overview'):
     ephe = isEph(ctx)
     #ephe check
     #cancel id too high
-    if not ctx.author.id in BOT_OWNER_IDS the and amount > 100:
+    if not ctx.author.id in BOT_OWNER_IDS:
         await ctx.send("### Too High!\nLimited at *100* messages.",ephemeral=ephe)
         return
     
