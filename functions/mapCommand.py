@@ -201,7 +201,7 @@ def gen_claimsMap():
     
     
     im.save("outputs/claimsMap.png")
-    im.save("test.png")
+    #im.save("test.png")
     
     #"debug" variables?
     #starsSO, starsNC
