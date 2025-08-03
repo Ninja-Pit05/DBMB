@@ -16,11 +16,11 @@ for star in existingStars:
 #market data set
 marketTypeList=[('Mekan','industrialMarket'),('Aurona','industrialMarket','techMarket'),('Quasar','tourismMarket'),('Tams','militaryMarket'),('Snicker','agricultureMarket'),('Zephyros','tourismMarket'),('Miata','techMarket','industrialMarket'),('Zubenelgenubi','refineryMarket'),('Kaabel','refineryMarket'),('Nimbral','militaryMarket'),('Nebulon','techMarket','industrialMarket','refineryMarket')]
 
-industrialMarket= {'buy':[("Cannon Ammo",2),("Rotary Cannon Ammo",2),("Electronics",16),("Fuel Injector",31),("Hydraulics",23),("Microchip",27),("Rift Crystal",50),('Blocks',"--")],'sell':[('Rock',3),('Iron Ore',10),('Gold Ore',17),('Titanium Ore',22),('Bread',1),('Canned Tuna',2),('Drinking Water',3),('Frog In A Jar',15),('Medical Supplies',27),('Nomster Energy',4)]}
+industrialMarket= {'buy':[("Cannon Ammo",2),("Rotary Cannon Ammo",2),("Electronics",16),("Fuel Injector",31),("Hydraulics",23),("Microchip",27),("Rift Crystal",50),('Blocks',"--")],'sell':[('Rock',6),('Iron Ore',30),('Gold Ore',35),('Titanium Ore',45),('Bread',1),('Canned Tuna',2),('Drinking Water',3),('Frog In A Jar',15),('Medical Supplies',27),('Nomster Energy',4)]}
 
-tourismMarket= {'buy':[('Blocks',"--")],'sell':[('Rock',3),('Iron Ore',10),('Gold Ore',17),('Titanium Ore',22),('Bread',1),('Canned Tuna',2),('Drinking Water',3),('Frog In A Jar',15),('Medical Supplies',27),('Nomster Energy',4),('Electronics',8),('Fuel Injector',15),('Hydraulics',11),('Microchip',13)]}
+tourismMarket= {'buy':[('Blocks',"--")],'sell':[('Rock',6),('Iron Ore',20),('Gold Ore',35),('Titanium Ore',45),('Bread',1),('Canned Tuna',2),('Drinking Water',3),('Frog In A Jar',15),('Medical Supplies',27),('Nomster Energy',4),('Electronics',8),('Fuel Injector',15),('Hydraulics',11),('Microchip',13)]}
 
-techMarket= {'buy':[("Cannon Ammo",2),("Rotary Cannon Ammo",2),("Electronics",16),("Fuel Injector",31),("Hydraulics",23),("Microchip",27),("Rift Crystal",50),('Blocks',"--")],'sell':[('Rock',3),('Iron Ore',10),('Gold Ore',17),('Titanium Ore',22),('Bread',1),('Canned Tuna',2),('Drinking Water',3),('Frog In A Jar',15),('Medical Supplies',27),('Nomster Energy',4)]}
+techMarket= {'buy':[("Cannon Ammo",2),("Rotary Cannon Ammo",2),("Electronics",16),("Fuel Injector",31),("Hydraulics",23),("Microchip",27),("Rift Crystal",50),('Blocks',"--")],'sell':[('Rock',6),('Iron Ore',20),('Gold Ore',35),('Titanium Ore',45),('Bread',1),('Canned Tuna',2),('Drinking Water',3),('Frog In A Jar',15),('Medical Supplies',27),('Nomster Energy',4)]}
 
 militaryMarket= {'buy':[('Blocks',"--")],'sell':[("Cannon Ammo",1),("Rotary Cannon Ammo",1)]}
 
