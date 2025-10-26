@@ -1053,7 +1053,7 @@ async def send_help_message_image(ctx, arg: str = ""):
     #^^ Ephemeral mode check
     if arg == "": (
         await ctx.send(
-            "# Command tree 'image'\nTwo really cool functions by **@KaasKroket** (aka Warden), one applies an image (**//image help apply**), and the other generates an image (**//image help generate**)"
+            "# Command tree 'image'\nTwo really cool functions by **@KaasKroket** (aka Warden), one applies an image (**//image help apply**), and the other generates an image (**//image help generate**). \n(**//image help ratio**)) is used for getting the ratio of an image automatically."
         )
     )
     elif arg == "apply": (
@@ -1063,7 +1063,7 @@ async def send_help_message_image(ctx, arg: str = ""):
     )
     elif arg == "generate": (
         await ctx.send(
-            "```'//image generate (drone width) (drone height) (drone name)'```**IMPORTANT** To use the command you need to attach an image.\n\nTo get a processed drone in game, you should copy the folder that the bot outputs into your local drone folder. \nFor android users this folder should be at: ```Android/Data/com.rizenplanet.droneboiconquest/files/Vehicles```\nFor PC users (Windows) this folder should be located at: ```C:\\Users\\(your user)\\AppData\\LocalLow\\Rizen Planet Studios\\Droneboi_ Conquest\\Vehicles```\n You can do this by downloading it directly from the bot, it is formatted correctly so it should automatically work."
+            "```'//image generate (drone width) (drone height) (drone name) (boolean LED mode) '```**IMPORTANT** To use the command you need to attach an image.\n\nTo get a processed drone in game, you should copy the folder that the bot outputs into your local drone folder. \nFor android users this folder should be at: ```Android/Data/com.rizenplanet.droneboiconquest/files/Vehicles```\nFor PC users (Windows) this folder should be located at: ```C:\\Users\\(your user)\\AppData\\LocalLow\\Rizen Planet Studios\\Droneboi_ Conquest\\Vehicles```\n You can do this by downloading it directly from the bot, it is formatted correctly so it should automatically work."
         )
     )
     elif arg == "ratio": (
@@ -1150,15 +1150,10 @@ async def img_apply_to_existing(ctx, droneW: int = 9, droneH: int = 13):
     await ctx.send("Applied image onto your drone:", file=discord.File(output_path, filename="Applied drone.dbv"))
 
 @image.command("generate")
-async def img_generate(ctx, droneW: int, droneH: int, droneName: str):
+async def img_generate(ctx, droneW: int, droneH: int, droneName: str, hasLeds: bool = False):
     if check_ephemeral(ctx):
         await ctx.send("This command is not compatible with ephemeral mode.", delete_after=3)
         return
-    #^^ Ephemeral mode check
-    if (droneW > 500 or droneH > 500):
-        if not(ctx.author.id in BOT_OWNER_IDS):
-            await ctx.send("Too large size, request denied when greater then 500 blocks.")
-            return
 
     image_path = "outputs/temp_file_404.png"
     dbv_path = "outputs/output_blocks.dbv"
@@ -1190,56 +1185,106 @@ async def img_generate(ctx, droneW: int, droneH: int, droneName: str):
     } for block_type, r, g, b, name in color_lines]
 
     blocks = []
-    for j in range(droneH):
-        for i in range(droneW):
-            r, g, b, a = pixels[j, i]
-            if a == 0:
-                continue
+    nc_connections = []
 
-            px = i - droneW // 2
-            py = j - droneH // 2
-            if px == 0 and py == 0:
+    if hasLeds:
+        visible_pixels = pixels[pixels[:, :, 3] > 0]
+        if len(visible_pixels) > 0:
+            avg_rgb = tuple(np.mean(visible_pixels[:, :3], axis=0).astype(int))
+            closest_color = min(color_palette, key=lambda c: compare_colors(avg_rgb, c["rgb"]))
+            signal_color = closest_color["name"]
+        else:
+            signal_color = "White"
+
+        blocks.append({
+            "n": "Constant On Signal",
+            "p": [0.0, 0.0],
+            "s": signal_color,
+            "ni": [0]
+        })
+
+        led_index = 1
+        iteration_counter = 0
+
+        offset_x = 0.25 if droneW % 2 != 0 else 0.0
+        offset_y = 0.25 if droneH % 2 != 0 else 0.0
+
+        for j in range(droneH):
+            for i in range(droneW):
+                iteration_counter += 1
+                if iteration_counter % 500 == 0:
+                    await asyncio.sleep(0)
+
+                r, g, b, a = pixels[j, i]
+                if a == 0:
+                    continue
+
+                px = (i - droneW / 2) * 0.5 + offset_x
+                py = (j - droneH / 2) * -0.5 - offset_y
+                if px == 0.0 and py == 0.0:
+                    continue
                 rgb = (r, g, b)
                 closest_color = min(color_palette, key=lambda c: compare_colors(rgb, c["rgb"]))
+
                 blocks.append({
-                    "n": "Core",
-                    "p": [float(px), float(py) * -1],
-                    "r": 0,
-                    "f": False,
+                    "n": "LED",
+                    "p": [float(px), float(py)],
                     "s": closest_color["name"],
-                    "wg": 3,
-                    "c": [],
-                    "ni": []
+                    "ni": [led_index]
                 })
-            else:
+
+                nc_connections.append({
+                    "Item1": led_index,
+                    "Item2": 0
+                })
+
+                led_index += 1
+
+    else:
+        iteration_counter = 0
+
+        for j in range(droneH):
+            for i in range(droneW):
+                iteration_counter += 1
+                if iteration_counter % 10000 == 0:
+                    await asyncio.sleep(0)
+
+                r, g, b, a = pixels[j, i]
+                if a == 0:
+                    continue
+
+                px = i - droneW // 2
+                py = j - droneH // 2
                 rgb = (r, g, b)
                 closest_color = min(color_palette, key=lambda c: compare_colors(rgb, c["rgb"]))
+
+                block_name = "Core" if (px == 0 and py == 0) else closest_color["type"]
                 blocks.append({
-                    "n": closest_color["type"],
+                    "n": block_name,
                     "p": [float(px), float(py) * -1],
-                    "r": 0,
-                    "f": False,
                     "s": closest_color["name"],
-                    "wg": 3,
-                    "c": [],
                     "ni": []
                 })
 
     ls_value = 0 if ctx.author.id in BOT_OWNER_IDS else 2
     full_output = {
         "n": droneName,
-        "gv": "1.5.4",
-        "dt": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+        "gv": "1.5.8",
+        "dt": datetime.now().strftime("%m/%d/%Y %I:%M:%S %p"),
         "ls": ls_value,
         "b": blocks,
-        "nc": [],
+        "nc": nc_connections,
         "ci": []
     }
 
     with open(dbv_path, "w") as f:
         json.dump(full_output, f, separators=(",", ":"))
 
-    await ctx.send("Converted image to drone:", file=discord.File(dbv_path, filename=f"{droneName}.dbv"))
+    await ctx.send(
+        f"Converted image to {'LED drone' if hasLeds else 'drone'}:",
+        file=discord.File(dbv_path, filename=f"{droneName}.dbv")
+    )
+
 
 
 
