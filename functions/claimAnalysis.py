@@ -1,4 +1,7 @@
-#2.0 last:jun 7
+"""
+Holds Functions related to '//analysis' Command
+"""
+#!!! Didn't visit this yet!! Gotta revise everything later!!!
 
 #debug dic
 Dic={'taken': {'faction': {'w': {'Mining Space Republic': 3, 'HOTDOG WATER': 5, 'MASTERNTON faction': 3, 'Fury’s Edge Fighting Shark': 14, 'Slavia': 1, 'Guns For Hire': 1, 'where do i buy tomatoes?': 2, "No Sandwiches For Fury's ?": 6, 'The Eklipse': 3}, 'l': {}}, 'station': {'Solaris Hub': 4, 'Ninja Station': 2, 'Utrecht Centraal': 6, 'Frontier City': 1, 'Aether Fortuna': 4, "Bobr's Arc": 2}, 'location': {'Sector 30 (Zephyros)': 4, 'Sector 27 (Quasar)': 2, 'Sector 5 (Kaabel)': 6, 'Sector 2 (Miata)': 1, 'Sector 24 (Aurona)': 4, 'Sector 7 (Snicker)': 2}, 'star': {}}, 'defended': {'faction': {'w': {"SIXER'S": 1, 'Fury’s Edge Fighting Shark': 1, 'Slavia': 4, 'Star Kingdom': 1, 'Massive Manufacturing Machines': 2, 'Xenon': 2, 'Frog Clan': 1, 'Mining Space Republic': 1, 'where do i buy tomatoes?': 2, 'Guns For Hire': 1, 'Polynesia miners space attack': 1, 'Atlas INC': 2, 'The Fryighter Industries': 1}, 'l': {}}, 'station': {'Aether Fortuna': 1, 'Frontier City': 4, 'Caravan Palace': 2, "Galaxy's Edge": 1, 'Lost Launchpads': 1, "Bobr's Arc": 1}, 'location': {'Sector 24 (Aurona)': 1, 'Sector 2 (Miata)': 4, 'Sector 9 (Astrin)': 2, 'Sector 26 (Nimbral)': 1, 'Sector 6 (Kaabel)': 1, 'Sector 7 (Snicker)': 1}, 'star': {}}}

@@ -1,6 +1,9 @@
-# version 2.0 "jun 2 - key"
-from PIL import Image
+# Version 2.1
+
+
+# ---------- Initializing ----------
 # Python imports
+from PIL import Image
 from discord.ext import commands
 import discord
 import signal
@@ -8,136 +11,134 @@ import os
 import random
 from time import strftime, localtime
 import asyncio
+import traceback
 import numpy as np
 import re
 import json
 from datetime import datetime
-# Python imports
-
 # Our imports
+import functions
+from functions import utils
+from functions import Report
 from assets import strings
-from database import preliminaryData
-from database import changeLog
-from database import imageData
-from functions import mapCommand
-from functions import faction_color
-from functions import god_action
-from functions import Functions
-from functions.Functions import getUpdatesChannels, triggeredSiegePings
-from functions.compareColors import compare_colors
-from functions.mapCommand import gen_claimsMap
-from functions import claimAnalysis
-# Our imports
+from assets import static
+from assets import change_logs
 
 
-# first bot sets
+
+# Discord Bot setup
 intents = discord.Intents.default()
 intents.message_content = True
-
-bot = commands.Bot(command_prefix='//', intents=intents, help_command=None)
-
-
+bot = commands.Bot(command_prefix=['//','>'], intents=intents, help_command=None)
 BOT_OWNER_IDS = [
     982591657130213406,
     1195827600925405245,
 ]
 
-sosCallsChID = 0
+
+# DataBase initialization
+def _db_init(path: str):
+    with open(path,'a') as file:
+        if file.tell() != 0:
+            return
+    with open(path,'w') as fille:
+        fille.write(json.dumps({},indent=4))
+
+for file in [
+    "database/autoUpdatesChannels.txt",
+    "database/Allowed_Faction_Owners.txt",
+    "database/custom_faction_colors.txt",
+    "database/siegePingList.txt",
+    ]:
+        _db_init(file)
 
 
 
-# function to get context info
+# Functions to get requests key-info
 def get_info(ctx):
-    info = " (server:{}/channel:{}/user:{}/time:'{}')".format(ctx.guild.name, ctx.channel.name, ctx.message.author.name,
-                                                              strftime("%H:%M:%S", localtime()))
+    info = " (server:{}/channel:{}/user:{}/cmd:{}/time:'{}')".format(ctx.guild.name, ctx.channel.name, ctx.message.author.name, ctx.command, strftime("%H:%M:%S", localtime()))
     return info
-#ephemeral before anything
-def isEph(ctx):
-    with open("database/ephemeral.txt") as file:
-        if str(ctx.guild.id) in file.read():
-            return True
-        else: return False
-#ephemeral and slash check
-def check_ephemeral(ctx):
-    ephe = isEph(ctx)
-    if ephe == True and ctx.message.content.startswith("//"):
-        return True
-    return False
-        
 
-# start phase
+
+
+
+
+
+# ---------- Bot client ----------
+
+# executes on connection
 @bot.event
 async def on_ready():
     print(f'\033[90mSuccessfully logged in as \033[94m{bot.user}!\033[0m')
     await bot.tree.sync()
-    
     print("\033[1;96mInitialized commands phase\033[0m")
-
-    # on wake up map update
-    gen_claimsMap() if False else 0
+    # on wake up, map update
+    await functions.map.gen_claimsMap() if False else 0
     print("-->Auto map update. '{}'".format(strftime("%H:%M:%S", localtime())))
 
 
-# trigger for every message
+
+# triggers on every message
 @bot.event
 async def on_message(message):
     # checks for commands and execute them.
     await bot.process_commands(message)
-
-    # updade map (server sided)
-    if message.content in ['A siege was completed', 'A siege was defended'] and message.channel.id == (
-            1326217953326141521):
+    
+    
+    # automatically updates faction claims map. 
+    # Channel hard coded cause yes.
+    if message.content in ['A siege was completed', 'A siege was defended'] and message.channel.id == (1326217953326141521):
         await message.channel.send('Updating map...')
-        print("-->Conquest Log got an update")
-        mapCommand.gen_claimsMap()
-        print("<--Map updated {} (auto)".format(strftime("%H:%M:%S", localtime())))
+        print("--> Conquest Log got an update")
+        await functions.map.gen_claimsMap()
+        print("<-- Map updated {} (auto)".format(strftime("%H:%M:%S", localtime())))
         await message.channel.send('Map updated.')
-
-    # from the command "set-update". Sends auto updates to servers.
+    
+    
+    # from //auto_map sends auto map updates
+    # Channel hard coded cause yes
     if message.content in ['A siege was completed'] and message.channel.id == (1326217953326141521):
-        # Get servers and channels to update maps
-        toUpdateChannelList = getUpdatesChannels()
-        # here i handle problems with auto maps.
-        toUpdateTries = 3
-        while True:
-            for channel_id in toUpdateChannelList:
+         # Get servers and channels to update
+        channels_to_update = functions.auto_map.get_all_channels()
+        tries=3
+        while tries > 0:
+            for channel_id in channels_to_update:
                 try:
                     # checks for channel existence.
                     channel = bot.get_channel(channel_id)
-                except:
-                    print("\033[31mERROR\033[0m while trying to get allowed channels IDs")
-                    break
+                except Exception as e:
+                    print("\033[31mERROR\033[0m while trying to get channel {}\n - {}".fornat(channel_id,e))
+                    continue
                 try:
-                    # fetchs the message and message embeds.
-                    fetchedMes = await message.channel.fetch_message(message.id)
-                    embed = fetchedMes.embeds
+                    # fetches siege data.
+                    target_message= await message.channel.fetch_message(message.id)
+                    embed = target_message.embeds
                     await channel.send("**{}** successfully sieged **{}** taking the station from **{}**".format(
                         embed[0].fields[3].value, embed[0].fields[1].value, embed[0].fields[2].value),
-                        file=discord.File('outputs/claimsMap.png'))
-                    # one less item on the list.
-                    toUpdateChannelList.pop(toUpdateChannelList.index(channel_id))
-                except Exception as Ex:
-                    print("\033[31mERROR\033[0m while trying to send auto map updates!",Ex)
-            # tries again, and warns if it wasn't possible to send everything.
+                        file=discord.File('output/claimsMap.png'))
+                    channels_to_update.remove(channel_id)
+                except Exception as e:
+                    print("\033[31mERROR\033[0m while trying to send auto map updates! - {}".format(e))
+            # Keeps trying but quits after 3 tries.
             if len(toUpdateChannelList) == 0:
                 print("<-- Auto map updates were delivered successfully")
                 break
             else:
-                toUpdateTries -= 1
-                print('-->Trying again...')
-            if toUpdateTries == 0:
-                print("\033[31m<-- It wasn't possible to send all auto map updates. {} were left... \033[0m ".format(
-                    len(toUpdateChannelList)))
+                tries -= 1
+                print('--> Trying again to send updates of auto map...')
+            if tried == 0:
+                print("\033[31m<-- It wasn't possible to send all auto map updates. {} were left... \033[0m ".format(len(toUpdateChannelList)))
                 break
         del [toUpdateChannelList, toUpdateTries]
 
-    # siege pings
+
+    # from //siege_ping sends pings.
+    # Channel hard coded cause yes
     if message.content.startswith("A new siege will start in 10 minutes") and message.channel.id == (
             1326217953326141521):
-        fetchedMes = await message.channel.fetch_message(message.id)
-        embed = fetchedMes.embeds
-
-        # testing
+        target_message = await message.channel.fetch_message(message.id)
+        embed = target_message.embeds
+        #Emoji for different latencies
         sentTime = embed[0].timestamp
         receivedTime = fetchedMes.created_at
         latencyTime = receivedTime - sentTime
@@ -160,200 +161,183 @@ async def on_message(message):
             Emo = "😭"
         else:
             Emo = "💀"
-        # testing
-
-        PINGSdict = triggeredSiegePings(embed[0].fields[2].value.lower())
-        for key in PINGSdict.keys():
+        # Emoji for different latencies
+        triggered_dict = functions.siege_pings.check_triggers(embed[0].fields[2].value.lower())
+        for key in triggered_dict.keys():
             try:
                 pchannel = bot.get_channel(int(key))
                 pingsLine = ""
-                for id in PINGSdict[key]:
+                for id in triggered_dict[key]:
                     pingsLine += "<@{}>".format(id)
-                    if PINGSdict[key].index(id) != len(PINGSdict) - 1: pingsLine += ", "
-                await pchannel.send(
-                    "**{}** will get attacked in 10 minutes by **{}** at **{}**!!\n{}\n-# Latency: {} {}".format(
-                        embed[0].fields[2].value, embed[0].fields[3].value, embed[0].fields[1].value, pingsLine,
-                        latencyTime, Emo))
-            except Exception as exc:
-                print("\033[91mError on siege pings '{}' on id {}\033[0m".format(exc, key))
-        print("<--Siege pings sent")
-
-    # Coding for SOScalls
-    if sosCallsChID != 0:
-        if message.channel.id == sosCallsChID and not message.content.startswith("_ _"):
-            channel = bot.get_channel(1357771433580953951)
-            await channel.send("_ _ {}: {}".format(message.author, message.content))
-        if message.channel.id == 1357771433580953951 and not message.content.startswith(
-                "_ _") and not message.content.startswith("//attend"):
-            channel = bot.get_channel(sosCallsChID)
-            await channel.send("_ _ {}".format(message.content))
-        
+                    if triggered_dict[key].index(id) != len(triggered_dict) - 1: pingsLine += ", "
+                await pchannel.send("**{}** will get attacked in 10 minutes by **{}** at **{}**!!\n{}\n-# Latency: {} {}".format(
+                            embed[0].fields[2].value,
+                            embed[0].fields[3].value,
+                            embed[0].fields[1].value,
+                            pingsLine,
+                            latencyTime,
+                            Emo))
+            except Exception as e:
+                print("\033[91mError on siege pings '{}' on id {}\033[0m".format(e, key))
+        print("<-- Siege pings sent")
 
 
+
+
+@bot.before_invoke
+async def report_it(ctx):
+    info=get_info(ctx)
+    Report.write('[info] {}'.format(info))
+    
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error,discord.ext.commands.errors.CommandNotFound):
+        await ctx.send(error)
+        return
+    info=get_info(ctx)
+    err = ''.join(traceback.format_exception(error))
+    Report.write('[ERROR] {} {}'.format(info,err))
+    raise error
+
+
+
+
+
+
+
+# ---------- Bot Commands ----------
 
 # ping-pong command
 @bot.hybrid_command("ping")
 async def ping_pong(ctx):
-    if check_ephemeral(ctx): return
-    ephe = isEph(ctx)
-    #ephe check
-    await ctx.send("Pong!",ephemeral = ephe)
+    await ctx.send("Pong!")
     print("-->Ping received!" + get_info(ctx))
+
 
 
 # map command
 @bot.hybrid_command('map')
-async def map(ctx,arg=None):
-    if check_ephemeral(ctx): return
-    ephe = isEph(ctx)
-    #ephe check
-    if ctx.message.content.startswith('//map update') or arg=='update':
-        print("-->Update map command received" + get_info(ctx))
-        await ctx.send('Updating the map...', ephemeral=ephe)
-        mapCommand.gen_claimsMap()
-        await ctx.send('Map was updated successfuly!',ephemeral=ephe)
-        print("<--Map was successfully updated {} (manual)".format(strftime("%H:%M:%S", localtime())))
+async def map_cmd(ctx, args=None):
+    await ctx.typing()
+    if args is not None and 'update' in args:
+        await functions.map.gen_claimsMap()
+        await ctx.send('Map was updated successfuly!')
+        print("<-- Map was updated {} (manual)".format(strftime("%H:%M:%S", localtime())))
     else:
-        print("-->Map command received" + get_info(ctx))
-        await ctx.send('Actual Droneboi Map:',file=discord.File('outputs/claimsMap.png'), ephemeral=ephe)
+        await ctx.send('Actual Droneboi Map:',file=discord.File('output/claimsMap.png'))
 
-#map and leaderboard fusion!!!
+
+
+#map and leaderboard fusion.
 @bot.hybrid_command('maplb')
 async def maplb(ctx):
-    await map(ctx)
+    await map_cmd(ctx)
     await leaderboard(ctx)
+
+
 
 # help command
 @bot.hybrid_command('help')
 async def help(ctx):
-    if check_ephemeral(ctx): return
-    ephe = isEph(ctx)
-    #ephe check
-    await ctx.send(strings.help, ephemeral=ephe)
-    print("-->Help command received" + get_info(ctx))
+    await ctx.send(strings.help)
+
 
 
 # new command
 @bot.hybrid_command('new')
 async def new(ctx):
-    if check_ephemeral(ctx): return
-    ephe = isEph(ctx)
-    #ephe check
-    await ctx.send(strings.new, ephemeral=ephe)
-    print("-->New command received" + get_info(ctx))
+    await ctx.send(strings.new)
 
 
-# faction tree. Changes faction color claims.
-@bot.group('faction',invoke_without_command=True)
+
+# >>> Faction color command tree.
+@bot.hybrid_group('faction',invoke_without_command=True)
 async def faction(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    #ephe check
-    await ctx.send('### Faction Command Tree. ```faction command\n\n//faction color set "{Hex code}" - edit faction custom color\n     Hex code format should be "#rrggbb"\n     Example: "//faction color set "#ffffff""\n\n//faction color get - return faction colors value.```')
+    await ctx.send(strings.faction_color_help)
 
-@faction.command('color')
-async def faction_color(ctx, *arg):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    #set mode
-    if arg[0] == "set":
-        #checks HEX code vality
-        if len(arg[1]) != 7:
-            await ctx.send("Invalid HEX code.\nHEX format should be `#rrggbb`")
+@faction.group('color',invoke_without_command=True)
+async def faction_color(ctx):
+    await ctx.send(strings.faction_color_help)
+
+@faction_color.command('get')
+async def faction_color_get(ctx):
+    #returns list of configured factions.
+    with open("database/custom_faction_colors.txt") as fil:
+        file=json.loads(fil.read())
+        if not file:
+            await ctx.send("Smh I'm empty. No faction, no colors, no nothing.")
             return
-        #checks if is on the whitelist
-        if faction_color.get_faction(ctx.message.author.name) == "None":
-            await ctx.send("You're not allowed to change faction colors in any faction. To be added to the whitelist, ask your faction leader to contact Ninja")
-        else:
-            #try to change color.
-            try:
-                await ctx.send(faction_color.edit_color(faction_color.get_faction(ctx.message.author),arg[1]))
-                print("--> Faction cmd. Color changed successfuly! {}".format(get_info(ctx)))
-            except Exception as Exp:
-                await ctx.send("I ran into some internal erros. Please contact my creator.")
-                print("\033[31m ERROR! Exception at 'faction color set' : {}".format(Exp), "\033[0m" )
-    #get mode
-    elif arg[0] == "get":
-        #opens database, caches each faction/color pair, then outputs it.
-        with open("database/custom_faction_colors.txt") as file:
-            String = "```"
-            for line in file:
-                String += line[line.find("faction:"):line.find("'$'")] + "\n" + line[line.find("color:"):line.find(
-                    "color:") + 13] + "\n"
+        String = "```\n"
+        for faction in file:
+            String += faction + "\n" + file[faction] + "\n"
         String += "```"
-        await ctx.send(String)
-        del String
-        print("--> Faction cmd. Color pairs outputed! {}".format(get_info(ctx)))
+    await ctx.send(String)
+    del String
+
+@faction_color.command('set')
+async def faction_color_set(ctx, color=None):
+    if color is None:
+        await ctx.send('### Missing "Color" Argument.\n - You must send a valid HEX color code.\n - Example: `#ffaaff` `#ab6381` `#00aa00`')
+        return
+    if not utils.is_hex(color):
+        await ctx.send("### Invalid HEX code.\n - HEX code format should be `#rrggbb`\n - Example: `//faction color set #310bff`")
+        return
+    #checks if is on the whitelist
+    if functions.faction_color.get_faction(ctx.message.author.name) is None:
+        await ctx.send("You're not allowed to change the colors for any faction. To be added to the whitelist, ask your faction leader to contact Ninja")
     else:
-        await ctx.send("Invalid argument.")
+        #try to change color.
+        try:
+            functions.faction_color.edit_color(functions.faction_color.get_faction(ctx.message.author.name),color)
+            await ctx.send(f"Faction ***{faction_color.get_faction(ctx.message.author)}*** color changed to `{color}`")
+        except Exception as e:
+            await ctx.send(f"ERROR: {e}")
+            print("\033[31m ERROR! Exception at 'faction color set' : {}".format(e), "\033[0m" )
+            raise
+
 
 
 # just print my name.
 @bot.command('owner')
 async def owner(ctx):
     await ctx.send("Made by Ninja.")
-    print("-->Owner command  " + get_info(ctx))
 
 
-# God mode
-@bot.command('god_mode:')
-async def GodMod(ctx):
-    if ctx.message.author.name == "el_ninja.brain":
-        await god_action.god_actions(ctx)
-        print("-->God mode" + get_info(ctx) + "[" + ctx.message.content + "]")
-    else:
-        await ctx.send("You don't have access to that command.")
-        print("-->Tried god mode - " + get_info(ctx))
 
-
-# idk why but feedback
+# feedback command
 @bot.hybrid_command('feedback')
 async def feedback(ctx, *,message=None):
-    if check_ephemeral(ctx): return
-    ephe = isEph(ctx)
-    #ephe check
     if message==None:
         await ctx.send(
-            "### Feedback Commad.\nFound an issue, got an ideia to add to the bot, or want to give a suggestion? Give us feedback through this command. Use '`//feedback (your message)`' and it will be sent directly to our bot development server..",ephemeral=ephe)
+            "## Feedback Commad.\nFound an issue, got an ideia, or want to make a suggestion? Give us feedback through this command. Use '`//feedback (your message)`' and it will be sent directly to our development server.")
     else:
-        await ctx.send("Your feedback was received",ephemeral=ephe)
-        print("-->Yo got feedback" + get_info(ctx))
-        feedbackChannel = bot.get_channel(1376645332582006785)
+        await ctx.send("Thanks for your feedback.")
+        #feedback channel hard-coded cause yes
+        feedbackChannel = bot.get_channel(1380939646560895056)
         await feedbackChannel.send(message+"\n-# "+get_info(ctx))
+
 
 
 # leaderboard command
 @bot.hybrid_command('leaderboard',aliases=['lb','leaders'])
 async def leaderboard(ctx):
-    if check_ephemeral(ctx): return
-    ephe = isEph(ctx)
-    #ephe check
-    print('-->Leaderboard command was used - ' + get_info(ctx))
-    await ctx.send('Retrieving information from db servers...',ephemeral=ephe)
-    await ctx.send("Here is the leaderboard:\n```" + Functions.get_leadership_board() + "```",ephemeral=ephe)
+    await ctx.typing()
+    await ctx.send("Here is the leaderboard:"+ await utils.leaderboard())
+
+
 
 # crystals command
 @bot.hybrid_command('crystal',aliases=['crystals','crystall','cry'])
 async def crystals(ctx):
-    if check_ephemeral(ctx): return
-    ephe = isEph(ctx)
-    #ephe check
-    print('--> Crystal command received - ' + get_info(ctx))
-    Functions.crystalsLocationMap().save('outputs/CrystalsLocationMap.png')
-    await ctx.send('Here is where you can find and buy rift crystals:',file=discord.File('outputs/CrystalsLocationMap.png'),ephemeral=ephe)
-##last slash cmd
+    await ctx.typing()
+    file = utils.buffer(functions.map.crystals_map(),"CrystalsLocationMap.png")
+    await ctx.send('Here is where you can find and buy rift crystals:',file=file)
 
 
-##Fun Commands!
-# duck
+
+#Joke command DUCK!!
 @bot.command('duck')
 async def duck(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    print('-->DUCK!!!' + get_info(ctx))
     fileNumber = random.randint(1, 3)
     if fileNumber == 2:
         await ctx.send(file=discord.File('duck/duck' + str(fileNumber) + '.gif'))
@@ -361,682 +345,289 @@ async def duck(ctx):
         await ctx.send(file=discord.File('duck/duck' + str(fileNumber) + '.png'))
 
 
-# cat
-@bot.command('cat')
-async def duck(ctx):
-    print('-->CAT!!!' + get_info(ctx))
-    fileNumber = random.randint(1, 3)
-    if fileNumber == 2:
-        await ctx.send(file=discord.File('duck/cat' + str(fileNumber) + '.gif'))
-    else:
-        await ctx.send(file=discord.File('duck/cat' + str(fileNumber) + '.png'))
-#No fun anymore!
 
-
-#market tree
-@bot.group('market',invoke_without_command=True)
+#>>>> Market Command Tree
+@bot.hybrid_group('market',invoke_without_command=True)
 async def market(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    await ctx.send('### Market Command Tree.```//market map - Shows a map containing all market types.\n//market get {item name} - Shows a map with the locations to buy and sell the item specified. "//market get" for more info.\n//market info {market name} - Item list that you can buy and sell in that market type. "//market info" for details.```')
+    await ctx.send('## Market Command Tree.\n - //market map - \n -# Shows a map locating all Market Tables.\n - //market get {item name} - \n -# Shows a map showing where to buy and sell the item specified. "//market get" for more info.\n - //market info {market name} - \n -# Shows an item list for the Market Table specified. "//market info" for more info')
 
 #cmd: market map
 @market.command('map')
 async def market_map(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    #Gen then caches.
-    Functions.marketsTypeMap().save('outputs/MarketTypes.png')
-    print('-->Market Type Map command received - ' + get_info(ctx))
-    await ctx.send('Market map:')
-    await ctx.send(file=discord.File('outputs/MarketTypes.png'))
+    file = utils.buffer(functions.map.markets_type_map(),'MarketTypes.png')
+    await ctx.send('Market Table map:',file=file)
+    
 
-#cmd: market type map
-@market.command('type')
-async def market_type_map(ctx, arg):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    if arg == "map":
-        #this was the intended way, the other one that is actually the shortcut.
-        await market_map(ctx)
 
 #cmd: market get {item}
 @market.command('get')
-async def market_get(ctx, arg=None):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
+async def market_get(ctx, item: str=None):
+    if item == None:
+        await ctx.send('## Market Get command.\n Use this command to get a map showing which stars buys and sells a specified item.\n### Syntax: "//market get {item name}"\n - Use `//market get minerals` to get stars that buy Rock, Iron, Gold and Titanium.\n - Use `//market get Rift Crystal` or the shortcut `//crystal` to get stars that sell Rift Crystals.')
         return
-    if arg == None:
-        await ctx.send( 'This is the "`//market get {item name}`" command. Use this command to get a map showing stars that sell and buy specified item.\n Use "`//market get minerals`" to see all the stars that buy rock, iron, gold and titanium.\n Use "`//market get Rift Crystal`" or "`//crystal`" (shortcut) to see all stars that sell Rift Crystals.')
-    elif arg == "minerals":
-        Functions.marketGetItem(ctx.message.content).save('outputs/marketGet.png')
-        print('-->Minerals Location Command Received - ' + get_info(ctx))
-        await ctx.send("Minerals can be found:", file=discord.File('outputs/marketGet.png'))
+    await ctx.typing()
+    result = functions.map.market_get_item(item)
+    if result is None:
+        await ctx.send('Item could not be found.')
     else:
-        resultado = Functions.marketGetItem(ctx.message.content)
-        if resultado == None:
-            await ctx.send('Item could not be found.')
+        file = utils.buffer(result,'marketGet.png')
+        if item == "minerals":
+            await ctx.send("Minerals can be found:", file=file)
         else:
-            print('--> Market get cmd {{}}. {} ' + ctx.message.content[13:] + ' - ' + get_info(ctx))
-            resultado.save('outputs/marketGet.png')
-            await ctx.send("Item can be found:", file=discord.File('outputs/marketGet.png'))
-        del resultado
+            await ctx.send("Item can be found:", file=file)
+            
+
 
 #cmd: market info {market type}
 @market.command("info")
-async def market_info(ctx,arg=None):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    #if empty
-    if arg == None:
-        stringa="### Market info command. Uses:\n"
-        for key in preliminaryData.allMarkets:
-            stringa += '`//market info {}`\n'.format(key)
+async def market_info(ctx,market: str=None):
+    if market is None:
+        stringa="## Market Info command.\nUse this to get a list of items in a specified Market Table.\n### Current Market Tables:\n"
+        for key in static.allMarkets:
+            stringa += '`//market info {}`\n'.format(key[:-6])
         await ctx.send(stringa)
-    #if type exists
-    elif arg in preliminaryData.allMarkets.keys() or arg in ['refinery', 'agriculture' ,'military', 'tech', 'tourism', 'industrial']:
-        #return market type table
-        await ctx.send(arg+ ":\n" + Functions.getMarketTable(arg))
-        print('-->Market info about ' + arg + ' - ' + get_info(ctx))
-    #if invalid
-    else:
-        await ctx.send("Invalid command.\nHave u tried `tourismMarket` or `tech`?")
-
-
-#automatic map updates tree.
-@bot.group('auto',invoke_without_command=True)
-async def auto(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
         return
-    #^^ ephemeral mode check
-    await ctx.send("### Automatic Claims Map Updates command tree.\n'`auto map`' for short.\n'`auto map help`' for more details.")
+    result = functions.map.market_table(market.lower())
+    if result is None:
+        await ctx.send('### Invalid "Market Table" Argument.\n - Make sure you\'re using the right syntax: `//market info {market name}`.\n - Have u tried `tourism` or `tech`?\n - Ex: `//market info millitary`')
+    else:
+        await ctx.send(market+ ":\n" + result)
 
-#other half of the command syntax
+
+
+#>>> Auto Map Updates tree.
+@bot.hybrid_group('auto',invoke_without_command=True)
+async def auto(ctx):
+    await ctx.send(strings.help_update)
+
 @auto.group('map',invoke_without_command=True)
 async def auto_map(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    #ephemeral mode check
-    await ctx.send("### Automatic Claims Map Updates command tree.\n'`auto map`' for short.\n'`auto map help`' for more details.")
+    await ctx.send(strings.help_update)
 
-#auto map set
+#cmd: //auto map set
 @auto_map.command('set')
-async def auto_map_set(ctx, *arg):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and arg[0] == "n":
-        try:
-            await ctx.send(Functions.setUpdateChannel(ctx))
-            print("--> auto map set command received!" + get_info(ctx))
-        except:
-            await ctx.send("Error... I feel like... something inside me is broken")
-            print("--> \033[31m an ERROR ocurred while executing the command set-update.\033[0m")
+async def auto_map_set(ctx, channel: str=None):
+    if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain":
+        if channel == None:
+            functions.auto_map.set_channel(ctx.guild.id,ctx.channel.id)
+            await ctx.send(f"Auto map updates will be sent to {ctx.channel.mention}")
+        elif utils.is_channel(channel):
+            id = utils.extract_id(channel)
+            functions.auto_map.set_channel(ctx.guild.id,id)
+            await ctx.send(f"Auto map updates will be sent to {channel}")
+        else:
+            await ctx.send("### Invalid Channel.\nRemember, you just need to `#mention` the desired channel. Or leave the `channel` argument empty to use the current channel.")
     else:
-        await ctx.send("You must be an ADMIN to set a channel for auto updates.")
+        await ctx.send("### Permission Error\nYou must be an ADMIN to set a channel for auto updates.")
 
-#auto map get
+#cmd: //auto map get
 @auto_map.command('get')
 async def auto_map_get(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    #^^ Ephemeral mode check
-    print("--> auto map get command received!" + get_info(ctx))
-    if Functions.getUpdatesChannel(ctx) == None:
+    channel = functions.auto_map.get_channel(ctx.guild.id)
+    if channel is None:
         await ctx.send("There's no Channel defined to get auto updates on this server.")
     else:
-        channel = (int(Functions.getUpdatesChannel(ctx)))
-        await ctx.send(
-            "The https://discord.com/channels/{}/{} channel will receive auto map updates!".format(ctx.guild.id,channel))
+        await ctx.send("The https://discord.com/channels/{}/{} channel will receive auto map updates!".format(ctx.guild.id,channel))
 
-#auto map test
+#cmd: //auto map test
 @auto_map.command('test')
-async def auto_map_test(ctx, *arg):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    #^^ Ephemeral mode check
+async def auto_map_test(ctx):
     if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and arg[0] == 'n':
-        print("--> auto map test command received!" + get_info(ctx))
-        if Functions.getUpdatesChannel(ctx) == None:
+        channel = functions.auto_map.get_channel(ctx.guild.id)
+        if channel is None:
             await ctx.send("There's no Channel defined to get auto updates on this server.")
         else:
-            channel = (bot.get_channel(int(Functions.getUpdatesChannel(ctx))) or bot.fetch_channel(int(Functions.getUpdatesChannel(ctx))))
-            await channel.send("<@{}> This channel will receive auto map updates!".format(ctx.author.id))
+            channel = (bot.get_channel(int(channel)) or bot.fetch_channel(int(channel)))
+            await channel.send(f"{ctx.author.mention} ***~~Attacker Faction~~*** successfully sieged ***~~Sector (Star)~~*** taking the station from ***~~Sieged Faction~~***",file=discord.File('output/claimsMap.png'))
     else:
-        await ctx.send("You must be an ADMIN to use this command.")
+        await ctx.send("### Permission Error\nYou must be an ADMIN to use this command")
 
-#auto map help
-@auto_map.command('help')
-async def auto_map_help(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    await ctx.send(strings.help_update)
 
 
 # change logs cmd
 @bot.command('change-log')
 async def change_log(ctx, *arg):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    #help if empty
     if not arg:
-        await ctx.send("### Change Log Command.\nUsed to see all past changes and improvements.\nSyntax: '//change-log <arg>'\nExamples: '`//change-log 0`', '`//change-log 2 3 4 7`'.\nYou can also gather everything using `all` as argument. Be aware that it will return *all* of them.")
-    #print every single one if all
+        await ctx.send("## Change Log Command.\nUsed to see all past changes and updates.\n- Syntax: `//change-log {arg}`\n- - -# Where *arg* is a single integer, a list of them, or 'all'\n- Ex: '`//change-log 0`', '`//change-log 2 3 4 7`'.\n- - -# By passing 'all' as *arg* you gather every change-log. Be aware that it will return *all* of them.")
+    #Print all if arg == 'all'
     elif arg[0] == "all":
-        for log in changeLog.change_list:
+        for log in change_logs.change_list:
             await ctx.send(log)
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.7)
     #checks if valid and handles each output
     else:
         await ctx.send("Change Log:")
-        print("--> Change Log Cmd {} {}".format(arg,get_info(ctx)))
         for i in arg:
             try:
                 int(i)
-                if int(i) <= len(changeLog.change_list)-1:
-                    try: await ctx.send(changeLog.change_list[int(i)])
+                if int(i) <= len(change_logs.change_list)-1:
+                    try: await ctx.send(change_logs.change_list[int(i)])
                     except Exception as Exp:
                         await ctx.send("Error. Probably invalid argument `{}`".format(i))
                         print("\033[91mError on //change-log:",Exp,"\033[0m")
                 else:
-                    await ctx.send("Argument is too big. Max is `{}`".format(len(changeLog.change_list)-1))
+                    await ctx.send("Argument is too big. Max is `{}`".format(len(change_logs.change_list)-1))
             except Exception as Exp:
                     await ctx.send("Invalid argument `{}`".format(i))
-                    print("\033[91mError on //change-log:",Exp,"\033[0m")
+                    raise
+#maybe add a better way to this? Think later :)
 
-#maybe add other way to call change logs?
 
 
-# Siege Pings Cmd
-@bot.group('siege-ping', invoke_without_command=True)
+#>>> Siege Pings Command Tree
+@bot.hybrid_group('siegeping', invoke_without_command=True)
 async def siege_pings(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
     await ctx.send(strings.siege_ping)
 
-# test command
+"""@siege.hybrid_group('ping', invoke_without_command=True)
+async def siege_pings(ctx):
+    await ctx.send(strings.siege_ping)
+"""
+#cmd: //siege ping test
 @siege_pings.command("test")
-async def siege_test(ctx, *arg):
+async def siege_test(ctx, args):
     if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and "n" in arg:
-        try:
-            pchannel = Functions.getSiegePingChannel(ctx)
-            if pchannel == "Err:1":
-                await ctx.send("Guild inexistent. Use '`//siege-ping set channel`' first.")
-            else:
-                pchannel = bot.get_channel(int(pchannel))
-                try:
-                    pingsLine = ""
-                    for id in Functions.getSiegePingIds(ctx):
-                        pingsLine += "<@{}>, ".format(id)
-                    await pchannel.send("**{}** will get attacked in 10 minutes by **{}** at **{}**!!\n{}".format(
-                        "~~*Defending Faction*~~", "~~*Attacking Faction*~~", "~~*Star & Sector*~~", pingsLine))
-                except Exception as exc:
-                    await ctx.send("Seems like i ran to an error. I'm sorry.")
-                    print("\033[91mError at siege_test intern try: {}\033[0m".format(exc))
-        except Exception as exc:
-            await ctx.send("Error while trying to send ping.")
-            print("\033[91mError at siege_test external try: {}\033[0m".format(exc))
+        channel = functions.siege_pings.get_channel(ctx.guild.id)
+        if channel is None:
+            await ctx.send("### Guild Inexistent Error.\n Use '`//siegeping set channel`' first.")
+            return
+            #Quit early if guild inexistent.
+        channel = bot.get_channel(int(channel))
+        pings_str=""
+        for id in functions.siege_pings.get_ids(ctx.guild.id):
+             pings_str += "<@{}>, ".format(id)
+        await channel.send("**{}** will get attacked in 10 minutes by **{}** at **{}**!!\n{}".format("~~*Defending Faction*~~", "~~*Attacking Faction*~~", "~~*Star & Sector*~~", pings_str))
     else:
-        await ctx.send("You must be an admin to use this command.")
+        await ctx.send("### Permission Error\nYou must be an ADMIN to use this command")
 
-
-# set branch
+#!!!
+# --- 'set' Branch
 @siege_pings.group('set', invoke_without_command=True)
 async def siege_set(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    await ctx.send("set `channel`")
-
+    await ctx.send("### Siegepings *SET* Branch.\n - `//siegeping set channel`")
 
 @siege_set.command('channel')
-async def siege_set_channel(ctx, *arg):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
+async def siege_set_channel(ctx, channel: str):
     if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and "n" in arg:
-        if not arg:
-            await ctx.send(
-                "Here you should send a `channel ID` to receive siege pings. Or send `here` to use currently channel.")
-        else:
-            if arg[0] == "here":
-                arg = [x for x in arg]
-                arg[0] = str(ctx.channel.id)
-            try:
-                ctx.guild.get_channel(int(arg[0]))
-            except:
-                await ctx.send("Invalid channel ID")
-            else:
-                try:
-                    Functions.setSiegePingChannel(ctx, arg[0])
-                    await ctx.send("Channel set")
-                    print("--> Channel for siege pings was set. " + get_info(ctx))
-                except Exception as er:
-                    print("\033[91;1mError\033[0m on siege_set_channel ({})".format(er))
-                    await ctx.send("Something went wrong... Error on siege_set_channel")
+        if not utils.is_channel(channel):
+            await ctx.send("### Invalid Channel.\nRemember, you just need to `#mention` the desired channel.")
+            return
+        functions.siege_pings.set_channel(ctx.guild.id, utils.extract_id(channel))
+        await ctx.send(f"Channel {channel} was set to receive siegepings.")
     else:
-        await ctx.send("You must be an admin to use this command.")
+        await ctx.send("### Permission Error\nYou must be an ADMIN to use this command")
 
 
-# get brench
+# --- 'get' Branch
 @siege_pings.group('get', invoke_without_command=True)
 async def siege_get(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    await ctx.send("get `channel`, `ids` or `factions`")
-
+    await ctx.send("### Siegepings *GET* Branch.\n - `//siegeping get channel`\n - `//siegeping get ids`\n - `//siegeping get factions`")
 
 @siege_get.command('channel')
 async def siege_get_channel(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    try:
-        await ctx.send(
-            "Siege pings will be sent to https://discord.com/channels/{}/{}\n-# if the link is broken, you're probably using the command wrong.".format(
-                ctx.guild.id, Functions.getSiegePingChannel(ctx)))
-    except Exception as er:
-        print("\033[91;1mError\033[0m on siege_get_channel ({})".format(er))
-        await ctx.send("Something went wrong... Error on siege_get_channel")
-
+    await ctx.send(
+        "Siege pings will be sent to https://discord.com/channels/{}/{}\n-# if the link is broken, try assigning a channel again.".format(
+            ctx.guild.id,
+            functions.siege_pings.get_channel(ctx.guild.id)))
 
 @siege_get.command('factions')
 async def siege_get_factions(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    try:
-        textin = ""
-        for fac in Functions.getSiegePingFactions(ctx):
-            textin += fac + "\n"
-        await ctx.send("These faction names will trigger pings: ```{}```".format(textin))
-    except Exception as er:
-        print("\033[91;1mError\033[0m on siege_get_factions ({})".format(er))
-        await ctx.send("Something went wrong... Error on siege_get_factions")
-
+    textin = ""
+    for fac in functions.siege_pings.get_factions(ctx.guild.id):
+        textin += fac + "\n"
+    await ctx.send("These faction names will trigger pings: ```{}```".format(textin))
 
 @siege_get.command('ids')
 async def siege_get_factions(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    try:
-        textin = ""
-        for item in Functions.getSiegePingIds(ctx):
+    textin = ""
+    for id in functions.siege_pings.get_ids(ctx.guild.id):
+        id_=utils.extract_id(id)
+        try:
+            name = await bot.fetch_user(id_)
+            textin += "{} <user:{}>\n".format(id, name.name)
+        except:
             try:
-                name = await bot.fetch_user(item)
-                textin += "{} <user:{}>\n".format(item, name.name)
+                name = ctx.guild.get_role(int(id_))
+                textin += "{} <role:{}>\n ".format(id, name.name)
             except:
-                try:
-                    name = ctx.guild.get_role(int(item[1:]))
-                    textin += "{} <role:{}>\n ".format(item, name.name)
-                except:
-                    textin += "{} <uknown>\n".format(item)
-        await ctx.send("These ids will be pinged:\n```{}```".format(textin))
-    except Exception as er:
-        print("\033[91;1mError\033[0m on siege_get_ids ({})".format(er))
-        await ctx.send("Something went wrong... Error on siege_get_ids")
+                textin += "{} <uknown>\n".format(id_)
+    await ctx.send("These ids will be pinged:\n```{}```".format(textin))
 
 
-# add brench
+# -- 'add'' Branch
 @siege_pings.group('add', invoke_without_command=True)
 async def siege_add(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    await ctx.send(
-        "add `id` or `faction`\n`id` can be player id or role with & before it\n`faction` NEEDS to be the exact full name of the faction in-game.")
-
+    await ctx.send("### Siegepings *ADD* Branch.\n - `//siegeping add id`\n - `//siegeping add faction`")
 
 @siege_add.command('id')
-async def siege_add_id(ctx, *arg):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
+async def siege_add_id(ctx, mentionable: str):
     if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and "n" in arg:
-        if not arg:
-            await ctx.send(
-                "Here you shoud send user's or role's ids to receive pings. When adding a role's id, add a `&` just before the id.")
+        if mentionable is None:
+            await ctx.send("### Siegeping Add Id Command\nAdd an ID to ping on sieges by mentioning either a user or a role.\nSyntax: `//siegeping add id {@mention}`\n - Ex:\n - - `//siegeping add id @VicTheCloned`\n - - `//siegeping add id @Anti-Siege-Team`\n - - `//siegeping add id @Siege_Pings_Role`")
+            return
+        elif utils.is_user(mentionable) or utils.is_role(mentionable):
+            pass
         else:
-            validID = False
-            try:
-                name = await bot.fetch_user(arg[0])
-                validID = True
-            except:
-                try:
-                    name = ctx.guild.get_role(int(arg[0][1:]))
-                    validID = True
-                except:
-                    pass
-            if validID == True:
-                try:
-                    res = Functions.addSiegePingId(ctx, arg[0])
-                    if res == "Suc":
-                        try:
-                            name = await bot.fetch_user(arg[0])
-                            name = "{} <user:{}>\n".format(arg[0], name.name)
-                        except:
-                            try:
-                                name = ctx.guild.get_role(int(arg[0][1:]))
-                                name = "{} <role:{}>\n ".format(arg[0], name.name)
-                            except:
-                                name = "{} <uknown>\n".format(arg[0])
-                        await ctx.send("Successfully added the id `{}`".format(name))
-                        print("--> Added id to siege pings. " + get_info(ctx))
-                    elif res == "Err:1":
-                        await ctx.send("Guild not found. Did you add it with `//siege-ping set channel`?")
-                    elif res == "Err:4":
-                        await ctx.send("The  id <{}> already exists.".format(arg[0]))
-                    else:
-                        print("SOMETHING IS WRONG2 ")
-                except Exception as er:
-                    print("\033[91;1mError\033[0m on siege_add_id ({})".format(er))
-                    await ctx.send("Something went wrong... Error on siege_add_id")
-            else:
-                await ctx.send("Invalid ID. It should be an user id or a role id.")
+            await ctx.send("### Invalid ID.\nRemember, you just need to `@mention` the desired user or role")
+            return
+        try:
+            functions.siege_pings.add_id(ctx.guild.id, mentionable)
+        except Exception as e:
+            await ctx.send('### Error {}'.format(e))
+            raise
+        await ctx.send("Successfully added the id {}".format(mentionable))
     else:
-        await ctx.send("You need to be an admin to use this command.")
-
+        await ctx.send("### Permission Error\nYou must be an ADMIN to use this command")
 
 @siege_add.command('faction')
-async def siege_add_faction(ctx, *arg):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
+async def siege_add_faction(ctx, *, faction: str=None):
     if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and "n" in arg:
-        if not arg:
-            await ctx.send(
-                'Here you should send a full in-game faction name to trigger pings. If the faction name has spaces, put it between "". Can be yours, your allie, even your enemie. Add one at a time.\n For intance: "Frog", Frog, Star, "Star" or "Massive Manufacturing Machines" will work.')
-        else:
-            try:
-                res = Functions.addSiegePingFaction(ctx, arg[0])
-                if res == "Suc":
-                    await ctx.send("Faction ''{}'' added.".format(arg[0]))
-                    print("--> Added trigger to siege pings. " + get_info(ctx))
-                elif res == "Err:1":
-                    await ctx.send("Guild not found. Did you add it with `//siege-ping set channel`?")
-                elif res == "Err:2":
-                    await ctx.send("''{}'' already exists.".format(arg[0]))
-                else:
-                    print("SOMETHING IS WRONG ")
-            except Exception as er:
-                print("\033[91;1mError\033[0m on siege_add_faction ({})".format(er))
-                await ctx.send("Something went wrong... Error on siege_add_faction")
+        if faction is None:
+            await ctx.send("### Siegeping Add Faction Command\nAdd factions to trigger siegepings. For your faction, allies, enemies etc.\nSyntax: `//siegeping add faction {faction name}`\n - Faction names must be exactly equal as in-game and fully written.\n - No 'MMM' or 'FROG' per instance.\n - Be aware of spaces and special characters\n - Ex:\n - - `//siegeping add faction Star`\n - - `//siege ping add faction Massive Man Machinery`\n - - `//siegeping add faction Rabbits`")
+            return
+        functions.siege_pings.add_faction(ctx.guild.id, faction.strip())
+        await ctx.send("Faction '`{}`' added.".format(faction))
     else:
-        await ctx.send("You must be an admin to use this command.")
+        await ctx.send("### Permission Error\nYou must be an ADMIN to use this command")
 
 
-# del brench
+# -- 'del' Branch
 @siege_pings.group('del', invoke_without_command=True)
 async def siege_del(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    await ctx.send(
-        "delete an `id` or `faction`\n`id` can be player id or role with & before it\n`faction` should be it's name.")
-
+    await ctx.send("### Siege Pings *DEL* Branch.\n - `//siegeping del id`\n - `//siegeping del faction`")
 
 @siege_del.command('id')
-async def siege_del_id(ctx, *arg):
+async def siege_del_id(ctx, mentionable: str):
     if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and "n" in arg:
-        if not arg:
-            await ctx.send(
-                "Here you shoud send user's or role's ids to delete. When deleting a role's id, add a `&` just before the id.")
+        if mentionable is None:
+            await ctx.send("### Siegeping Del Id Command\nDelete IDs by mentioning either a user or a role.\nSyntax: `//siegeping del id {@mention}`\n - Ex:\n - - `//siegeping del id @Polarina`\n - - `//siegeping del id @Pro-Siege-Team`\n - - `//siegeping del id &27173828103`")
+            return
+        elif utils.is_user(mentionable) or utils.is_role(mentionable):
+            pass
         else:
-            try:
-                res = Functions.delSiegePingId(ctx, arg[0])
-                if res == "Suc":
-                    await ctx.send("Id ''{}'' deleted.".format(arg[0]))
-                    print("--> Deleted ID to siege pings. " + get_info(ctx))
-                elif res == "Err:1":
-                    await ctx.send("Guild not found. Did you add it with `//siege-ping set channel`?")
-                elif res == "Err:3":
-                    await ctx.send("''{}'' already inexistent.".format(arg[0]))
-                else:
-                    print("SOMETHING IS WRONG ")
-            except Exception as er:
-                print("\033[91;1mError\033[0m on siege_del_id ({})".format(er))
-                await ctx.send("Something went wrong... Error on siege_del_id")
+            await ctx.send("### Invalid ID.\nRemember, you just need to `@mention` the desired user or role")
+            return
+        try:
+            functions.siege_pings.del_id(ctx.guild.id, mentionable)
+        except Exception as e:
+            await ctx.send('### Error {}'.format(e))
+            raise
+        await ctx.send("Successfully deleted the id {}".format(mentionable))
     else:
-        await ctx.send("You must be an admin to use this command.")
-
+        await ctx.send("### Permission Error\nYou must be an ADMIN to use this command")
 
 @siege_del.command('faction')
-async def siege_del_faction(ctx, *arg):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
+async def siege_del_faction(ctx, *, faction: str):
     if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and "n" in arg:
-        if not arg:
-            await ctx.send(
-                'Here you should send the faction name. If the faction name has spaces, put it between "". Del one at a time.\n For intance: "frog clan", Star, "Star" or "Massive Manufacturing Machines" will work.')
-        else:
-            try:
-                res = Functions.delSiegePingFaction(ctx, arg[0])
-                if res == "Suc":
-                    await ctx.send("Faction ''{}'' deleted.".format(arg[0]))
-                    print("--> Deleted trigger to siege pings. " + get_info(ctx))
-                elif res == "Err:1":
-                    await ctx.send("Guild not found. Did you add it with `//siege-ping set channel`?")
-                elif res == "Err:3":
-                    await ctx.send("''{}'' already inexistent.".format(arg[0]))
-                else:
-                    print("SOMETHING IS WRONG ")
-            except Exception as er:
-                print("\033[91;1mError\033[0m on siege_del_faction ({})".format(er))
-                await ctx.send("Something went wrong... Error on siege_del_faction")
+        if faction is None:
+            await ctx.send("### Siegeping Del Faction Command\nDeletes factions.\nSyntax: `//siegeping del faction {faction name}`\n - Faction names must be exactly equal in memory. To get a list of them use `//siegeping get factions`\n - Be aware of spaces and special characters\n - Ex:\n - - `//siegeping del faction void`\n - - `//siegeping del faction ice cube`\n - - `//siegeping del faction ahoy`")
+            return
+        functions.siege_pings.del_faction(ctx.guild.id, faction.strip())
+        await ctx.send("Faction '`{}`' deleted.".format(faction))
     else:
-        await ctx.send("You must be an admin to use this command")
+        await ctx.send("### Permission Error\nYou must be an ADMIN to use this command")
 
 
-# command used for me to help people in other servers
-@bot.group('call', invoke_without_command=True)
-async def sosCall(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    await ctx.send(strings.sosCall)
-
-
-@sosCall.command('status')
-async def callStatus(ctx, *arg):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    print(arg)
-    if len(arg) > 0 and arg[0] == 'all':
-        with open("database/calls.txt") as file:
-            listCalls = ""
-            for line in file:
-                if str(ctx.guild.id) in line:
-                    pieces = line.split(";")
-                    match pieces[2]:
-                        case "0":
-                            status = "🟠 Waiting Connection"
-                        case "1":
-                            status = "🟢 Connected"
-                        case "2":
-                            status = "🟡 Paused"
-                    listCalls += "\n`Channel:`https://discord.com/channels/{}/{}  `ID:{}\nStatus:{}`\n".format(
-                        pieces[0], pieces[1], pieces[1], status)
-            await ctx.send("List of request status:\n{}".format(listCalls))
-
-    else:
-        with open("database/calls.txt") as file:
-            for line in file:
-                if str(ctx.guild.id) in line and str(ctx.channel.id) in line:
-                    pieces = line.split(";")
-                    if "\n" in pieces[2]: pieces[2] = pieces[2][:-1]
-                    match pieces[2]:
-                        case "0":
-                            status = "🟠 Waiting Connection"
-                        case "1":
-                            status = "🟢 Connected"
-                        case "2":
-                            status = "🟡 Paused"
-                    break
-            try:
-                status
-            except:
-                status = "🔴 Closed"
-            await ctx.send("`Connection Status: {}`".format(status))
-
-
-@sosCall.command('help')
-async def callHelp(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    print("--> A Call was requested.{}".format(get_info(ctx)))
-    with open("database/calls.txt") as file:
-        existent = False
-        for line in file:
-            if str(ctx.guild.id) in line and str(ctx.channel.id) in line:
-                pieces = line.split(";")
-                if "\n" in pieces[2]: pieces[2] = pieces[2][:-1]
-                match pieces[2]:
-                    case "0":
-                        status = "🟠 Waiting Connection"
-                    case "1":
-                        status = "🟢 Connected"
-                    case "2":
-                        status = "🟡 Paused"
-                await ctx.send("Request already exists for this channel.\n`Connection Status: {}`".format(status))
-                existent = True
-    if existent == False:
-        with open("database/calls.txt", "a") as file:
-            file.write("{};{};0\n".format(ctx.guild.id, ctx.channel.id))
-            await ctx.send("Request Made.\n `Connection Status: 🟠 Waiting Connection`")
-            message = bot.get_channel(1357771433580953951)
-            with open("database/calls.txt") as file:
-                index = 0
-                for line in file:
-                    index += 1
-            await message.send("<@1195827600925405245> You're getting called! Index:{}".format(index))
-
-
-@sosCall.command('cancel')
-async def callCancel(ctx):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    with open("database/calls.txt") as file:
-        newFile = ""
-        for line in file:
-            if str(ctx.guild.id) not in line and str(ctx.channel.id) not in line:
-                newFile += line
-            else:
-                pieces = line.split(";")
-                print(pieces)
-                if pieces[2] in ["1\n", "1"]:
-                    global sosCallsChI
-                    sosCallsChID = 0
-        if newFile == file:
-            await ctx.send("There's no call request to cancel in this channel.\n`Connection Status: 🔴 Closed`")
-        else:
-            await ctx.send("Canceled the call request.\n`Connection Status: 🔴 Closed`")
-            with open("database/calls.txt", "w") as fil:
-                fil.write(newFile)
-
-
-# the counter part of sosCall. sosAttend
-@bot.group("attend", invoke_without_command=True)
-async def sosAttend(ctx):
-    if ctx.channel.id == 1357771433580953951:
-        await ctx.send(
-            "Command tree *attend* used to help people.\n\n```//attend list\n//attend accept {index}\n//attend decline {index}```")
-
-
-@sosAttend.command("list")
-async def sosAttendList(ctx):
-    if ctx.channel.id == 1357771433580953951:
-        with open("database/calls.txt") as file:
-            listCalls = ""
-            index = 0
-            for line in file:
-                if "\n" in line: line = line[:-1]
-                pieces = line.split(";")
-                if len(pieces) > 1:
-                    match pieces[2]:
-                        case "0":
-                            status = "🟠 Waiting Connection"
-                        case "1":
-                            status = "🟢 Connected"
-                        case "2":
-                            status = "🟡 Paused"
-                    listCalls += "{}# Faction:'{}'  Channel:'{}' Status:{}\n\n".format(index,
-                                                                                       await bot.fetch_guild(pieces[0]),
-                                                                                       await bot.fetch_channel(
-                                                                                           pieces[1]), status)
-                else:
-                    listCalls += "{}# ".format(index) + line + "\n\n"
-                index += 1
-            await ctx.send("```{}```".format(listCalls))
-
-
-@sosAttend.command("decline")
-async def sosAttendDecline(ctx, *arg):
-    if ctx.channel.id == 1357771433580953951:
-        with open("database/calls.txt") as file:
-            index = 0
-            newFile = ""
-            for line in file:
-                if str(index) not in arg:
-                    newFile += line
-                else:
-                    pieces = line.split(";")
-                    if len(pieces) > 1:
-                        message = bot.get_channel(int(pieces[1]))
-                        global sosCallsChID
-                        sosCallsChID = 0
-                        await message.send("Your Call was declined or was closed.\n`Connection Status: 🔴 Closed`")
-                index += 1
-            with open("database/calls.txt", "w") as fil:
-                fil.write(newFile)
-        await ctx.send("Declined")
-
-
-@sosAttend.command("accept")
-async def sosAttendAccept(ctx, arg):
-    if ctx.channel.id == 1357771433580953951:
-        with open("database/calls.txt") as file:
-            index = 0
-            newFile = ""
-            for line in file:
-                pieces = line.split(";")
-                if str(index) != arg:
-                    if len(pieces) > 1 and "1" in pieces[2]:
-                        message = bot.get_channel(int(pieces[1]))
-                        await message.send("Your call was put on wait mode.\n`Connection Status: 🟡 Paused`")
-                        pieces[2] = "2\n"
-                    else:
-                        pass
-                elif str(index) == arg:
-                    pieces[2] = "1\n"
-                    global sosCallsChID
-                    sosCallsChID = int(pieces[1])
-                    await ctx.send("Connected to {}#   `Status: 🟢 Connected`".format(index))
-                index += 1
-                try:
-                    line = "{};{};{}".format(pieces[0], pieces[1], pieces[2])
-                except:
-                    pass
-                newFile += line
-            with open("database/calls.txt", "w") as fil:
-                fil.write(newFile)
-            print("!-!Call Completed")
 
 
 # image generation by @a_person_that_exists1 (KaasKroket)
@@ -1044,13 +635,8 @@ async def sosAttendAccept(ctx, arg):
 async def image(ctx):
     return
 
-
 @image.command("help")
 async def send_help_message_image(ctx, arg: str = ""):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    #^^ Ephemeral mode check
     if arg == "": (
         await ctx.send(
             "# Command tree 'image'\nTwo really cool functions by **@KaasKroket** (aka Warden), one applies an image (**//image help apply**), and the other generates an image (**//image help generate**). \n(**//image help ratio**)) is used for getting the ratio of an image automatically."
@@ -1073,10 +659,6 @@ async def send_help_message_image(ctx, arg: str = ""):
     )
 @image.command("apply")
 async def img_apply_to_existing(ctx, droneW: int = 9, droneH: int = 13):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    #^^ Ephemeral mode check
     attachments = ctx.message.attachments
     if len(attachments) < 2:
         await ctx.send("Please attach both an image and a .dbv file.")
@@ -1091,9 +673,9 @@ async def img_apply_to_existing(ctx, droneW: int = 9, droneH: int = 13):
 
     await ctx.channel.typing()
 
-    image_path = "outputs/temp_image.png"
-    dbv_path = "outputs/input.dbv"
-    output_path = "outputs/updated_blocks.dbv"
+    image_path = "output/temp_image.png"
+    dbv_path = "output/input.dbv"
+    output_path = "output/updated_blocks.dbv"
 
     await image_attachment.save(image_path)
     await dbv_attachment.save(dbv_path)
@@ -1151,12 +733,9 @@ async def img_apply_to_existing(ctx, droneW: int = 9, droneH: int = 13):
 
 @image.command("generate")
 async def img_generate(ctx, droneW: int, droneH: int, droneName: str, hasLeds: bool = False):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.", delete_after=3)
-        return
 
-    image_path = "outputs/temp_file_404.png"
-    dbv_path = "outputs/output_blocks.dbv"
+    image_path = "output/temp_file_404.png"
+    dbv_path = "output/output_blocks.dbv"
     attachment = None
 
     if ctx.message.attachments:
@@ -1286,19 +865,13 @@ async def img_generate(ctx, droneW: int, droneH: int, droneName: str, hasLeds: b
     )
 
 
-
-
 @image.command("ratio")
 async def image_ratio(ctx, dimension: str = None):
-    if check_ephemeral(ctx):
-        await ctx.send("This command is not compatible with ephemeral mode.",delete_after=3)
-        return
-    #^^ Ephemeral mode check
     import discord
     from PIL import Image
     from math import gcd
 
-    image_path = "outputs/temp_ratio_check.png"
+    image_path = "output/temp_ratio_check.png"
 
     attachment = None
     if ctx.message.attachments:
@@ -1342,99 +915,83 @@ async def image_ratio(ctx, dimension: str = None):
 
 
 
-#Siege Analysis Group Tree
+
+# >>> Siege Analysis Group Tree
 @bot.hybrid_group('analysis',invoke_without_command=True)
 async def analysis(ctx):
-    if check_ephemeral(ctx): return
-    ephe = isEph(ctx)
-    #ephe check
-    await ctx.send("### Siege Analysis Command Tree.\n - `analysis board {messages}` - Returns a board containing data from the last *n* sieges.\n - `analysis heatmap` - Returns an sieges hot map from the last 100 sieges.",ephemeral=ephe)
+    await ctx.send("## Siege Analysis Command Tree.\n- //analysis board {n} \n-# Returns a board containing data from the last *n* sieges.\n- //analysis heatmap {n} {sensibility}` - Returns  siege hot map from the last *n* sieges.")
 
-#analysis board
 @analysis.command('board')
 async def analyBoard(ctx,amount=20,type='overview'):
-    if check_ephemeral(ctx): return
-    ephe = isEph(ctx)
-    #ephe check
-    #cancel id too high
+    #cancel amount too high
     if not ctx.author.id in BOT_OWNER_IDS:
-        await ctx.send("### Too High!\nLimited at *100* messages.",ephemeral=ephe)
+        await ctx.send("### Too High!\nLimited at *200* messages.")
         return
     
-    await ctx.send("*Trying to gather info from the last **{}** sieges...*".format(amount),ephemeral=ephe)
+    await ctx.send("*Trying to gather info from the last **{}** sieges...*".format(amount))
     
     #get messages
     databaseChannel = 1226483892391903283
     messages = [msg async for msg in bot.get_channel(databaseChannel).history(limit=amount*3)]
-    #let terminal and users know
-    await ctx.send("Found data for **{}** sieges.".format(int(len(messages)/3)),ephemeral=ephe)
-    print("--> Analysis of {} messages - {}".format(len(messages),get_info(ctx)))
+    #let ~~terminal~~ and users know
+    await ctx.send("Found data for **{}** sieges.".format(int(len(messages)/3)))
     
     #finish by sending full list.
-    await ctx.send(claimAnalysis.analysisBoard(claimAnalysis.analysisToDic(messages))[:1999])
+    await ctx.send(functions.claimAnalysis.analysisBoard(claimAnalysis.analysisToDic(messages))[:1999])
 
 #cmd heatmap
 @analysis.command('heatmap')
 async def analyHot(ctx,amount=30,sensibility=1.0):
-    if check_ephemeral(ctx): return
-    ephe = isEph(ctx)
-    #ephe check
+    #+++
+    kaksnd
     if amount>100 and ctx.author.id!=1195827600925405245:
-        await ctx.send("Too High! Max of ***100***",ephemeral=ephe)
+        await ctx.send("Too High! Max of ***200***")
+        return
+    if sensibility>10:
+        await ctx.send("Sensibility Too High! Max of ***10***")
         return
     if sensibility>10 and ctx.author.id!=1195827600925405245:
-        await ctx.send("Too High! Max of ***10***",ephemeral=ephe)
+        await ctx.send("Too High! Max of ***20***")
         return
-    await ctx.send("*Producing heatmap for the last **{}** sieges...*  \n-# *Sensibility {}*".format(amount, sensibility),ephemeral=ephe)
+    await ctx.send("*Producing heatmap for the last **{}** sieges...*  \n-# *Sensibility {}*".format(amount, sensibility))
     print("--> HeatMap",get_info(ctx))
     #get messages
     databaseChannel = 1226483892391903283
     messages = [msg async for msg in bot.get_channel(databaseChannel).history(limit=amount*3)]
-    claimAnalysis.heatmap(messages, sensibility)
-    await ctx.send("HeatMap:",file=discord.File("outputs/heatmap.png"),ephemeral=ephe)
+    file = utils.buffer(functions.claimAnalysis.heatmap(messages, sensibility))
+    await ctx.send("HeatMap:",file=file)
 
 
 
-#cmd to ephemeral servers
-@bot.hybrid_command('ephemeral')
-async def ephemeral(ctx,arg=None):
-    if check_ephemeral(ctx): return
-    ephe = isEph(ctx)
-    #ephe check
-    ephFile="database/ephemeral.txt"
-    #
-    if arg==None:
-        await ctx.send("### Ephemeral Mode.\nMakes *(most)* bot commands only visible to the sender while also blocking non-slash commands. Remember that, due to discord limitations some commands will never be compatible with Ephemeral Mode.\n`arg` : boolean.",ephemeral=ephe)
-    #turn on
-    elif arg in ["on","On","True","true","1",1,True]:
-        with open(ephFile) as fil:
-            file=fil.read()
-            if str(ctx.guild.id) in file:
-                pass
-            else:
-                with open(ephFile,"a") as file:
-                    file.write(str(ctx.guild.id)+":")
-    #turn off
-    elif arg in ["off","Off","False","false","0",0,False]:
-        with open(ephFile) as fil:
-            file=fil.read()
-            if str(ctx.guild.id) in file:
-                op = file.find(str(ctx.guild.id))
-                cl = file.find(str(ctx.guild.id))+len(str(ctx.guild.id))+1
-                newfile=str(file[:op]+file[cl:])
-                with open(ephFile,"w") as fill:
-                    fill.write(newfile)
-            else:
-                pass
-    with open(ephFile) as file:
-        if str(ctx.guild.id) in file.read():
-            await ctx.send("Ephemeral Commands: On",ephemeral=ephe)
-        else:
-            await ctx.send("Ephemeral Commands: Off",ephemeral=ephe)
-        print("--> Ephemeral Cmd {} - {}".format(arg,get_info(ctx)))
+#for admins
+@bot.hybrid_group('cl')
+async def color_adm(ctx):
+    if ctx.author.id not in BOT_OWNER_IDS:
+        await ctx.send("Prohibited.")
+        return
+
+@color_adm.command('set')
+async def cladm_set(ctx, faction: str, color: str):
+    if ctx.author.id not in BOT_OWNER_IDS:
+        await ctx.send("Prohibited.")
+        return
+    if not utils.is_hex(color.lower()):
+        await ctx.send("Invalid hex")
+        return
+    functions.faction_color.edit_color(faction,color)
+    await ctx.send(f"Eddited `{faction}` color to `{color}`")
 
 
-
+@color_adm.command('remove')
+async def cladm_rm(ctx, faction: str):
+    if ctx.author.id not in BOT_OWNER_IDS:
+        await ctx.send("Prohibited.")
+        return
+    if faction.lower() in functions.faction_color.get_factions():
+        functions.faction_color.rm_faction(faction)
+        await ctx.send('Removed `{}`'.format(faction))
+    else:
+        await ctx.send("Faction not found.")
 
 #shut down bot.
 @bot.command('shutdown')
@@ -1444,6 +1001,14 @@ async def shutdown(ctx):
         print(' !! SHUTTING DOWN !!')
         print(get_info(ctx))
         await bot.close()
+
+
+
+
+
+
+
+#----- Shutdown and Bot.Run ----
 
 # Signal handling for graceful shutdown
 async def shutdown_signal():
@@ -1456,43 +1021,3 @@ signal.signal(signal.SIGINT, lambda *_: handle_signal())
 signal.signal(signal.SIGTERM, lambda *_: handle_signal())
 
 bot.run(os.getenv('DISCORD_BOT_TOKEN'))  # Make sure to set the token in the environment variable DISCORD_TOKEN
-
-# trash that i keep here for some reason
-# these are "debug" and testing functions i use from time to time.
-
-@bot.command('test')
-async def tst(ctx):
-    print(ctx.guild.id)
-    print("hm")
-
-
-# @bot.command('embed')
-async def emb(ctx, id):
-    mes = await ctx.channel.fetch_message(id)
-    mis = (mes.embeds)[0].fields[0]
-    print(mes.embeds[0].fields[3])
-    print(mis.value)
-
-
-@bot.command('embed')
-async def emb(ctx, id):
-    mes = await ctx.channel.fetch_message(id)
-    mis = (mes.embeds)[0].fields[0]
-    print(mes.embeds[0].fields[3])
-    print(mis.name)
-    print(mes.embeds[0].fields[3].value.lower())
-    print(mes.embeds[0].timestamp)
-    print(mes.created_at)
-
-
-@bot.command('embedo')
-async def emb(ctx, id):
-    mes = await ctx.channel.fetch_message(id)
-    embe = (mes.embeds)
-    await ctx.send(mes.content, embeds=embe)
-    for i in embe:
-        a = (i.timestamp)
-        print(i.timestamp)
-    print(mes.created_at)
-    print(a - (mes.created_at))
-    print((mes.created_at) - a)

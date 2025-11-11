@@ -14,5 +14,6 @@
     "mining space republic ": "#afaf20",
     "slavia": "#d3d3d3",
     "atlas inc": "#25fcb4",
-    "mdas": "#00459b"
+    "mdas": "#00459b",
+    "bobo ooo ss": "#ffffff"
 }
