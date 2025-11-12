@@ -15,3 +15,5 @@ DBMB's main functionality is to be a quick, intuitive and easy way to check in-g
 # Development
 Discussion about the bot can be made on [#general-dbmb](https://discord.gg/EKaZ8R4Re)  and [#dev](https://discord.gg/eSzzaMtUV).
 Suggestions can be made on through the `//feedback` command that will be displayed on `#suggestions` channel or on the discord server.
+
+Those who don't know how to code but want to help with the bot can do so by testing the bot, finding bugs/errors/ fixing grammar (i fail at those a lot), suggesting new content or suggesting improvements.
