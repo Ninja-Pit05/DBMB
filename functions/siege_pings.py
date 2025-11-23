@@ -143,6 +143,6 @@ def check_triggers(trigger: str):
     
     output={}
     for guild in file:
-        if trigger in guild['factions']:
-            output[int(guild['channel'])] = [id for id in guild['ids']]
+        if trigger in file[guild]['factions']:
+            output[int(file[guild]['channel'])] = [id for id in file[guild]['ids']]
     return output
