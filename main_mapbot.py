@@ -140,7 +140,7 @@ async def on_message(message):
         embed = target_message.embeds
         #Emoji for different latencies
         sentTime = embed[0].timestamp
-        receivedTime = fetchedMes.created_at
+        receivedTime = target_message.created_at
         latencyTime = receivedTime - sentTime
         diffSec = int(latencyTime.total_seconds())
         if diffSec < 60:
