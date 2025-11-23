@@ -431,7 +431,7 @@ async def auto_map_get(ctx):
 
 #cmd: //auto map test
 @auto_map.command('test')
-async def auto_map_test(ctx, *arg):
+async def auto_map_test(ctx, *, arg):
     if ctx.author.guild_permissions.administrator or ctx.author.name == "el_ninja.brain" and arg[0] == 'n':
         channel = functions.auto_map.get_channel(ctx.guild.id)
         if channel is None:
