@@ -126,10 +126,10 @@ async def on_message(message):
             else:
                 tries -= 1
                 print('--> Trying again to send updates of auto map...')
-            if tried == 0:
-                print("\033[31m<-- It wasn't possible to send all auto map updates. {} were left... \033[0m ".format(len(toUpdateChannelList)))
+            if tries == 0:
+                print("\033[31m<-- It wasn't possible to send all auto map updates. {} were left... \033[0m ".format(len(channels_to_update)))
                 break
-        del [toUpdateChannelList, toUpdateTries]
+        del [channels_to_update, tries]
 
 
     # from //siege_ping sends pings.
