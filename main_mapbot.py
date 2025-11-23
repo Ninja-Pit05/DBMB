@@ -118,9 +118,9 @@ async def on_message(message):
                         file=discord.File('output/claimsMap.png'))
                     channels_to_update.remove(channel_id)
                 except Exception as e:
-                    print("\033[31mERROR\033[0m while trying to send auto map updates! - {}".format(e))
+                    print("\033[31mERROR\033[0m while trying to send auto map updates! {} - {}".format(channel_id,e))
             # Keeps trying but quits after 3 tries.
-            if len(toUpdateChannelList) == 0:
+            if len(channels_to_update) == 0:
                 print("<-- Auto map updates were delivered successfully")
                 break
             else:
