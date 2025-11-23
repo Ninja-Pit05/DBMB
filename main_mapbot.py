@@ -168,7 +168,7 @@ async def on_message(message):
                 pchannel = bot.get_channel(int(key))
                 pingsLine = ""
                 for id in triggered_dict[key]:
-                    pingsLine += "<@{}>".format(id)
+                    pingsLine += "{}".format(id)
                     if triggered_dict[key].index(id) != len(triggered_dict) - 1: pingsLine += ", "
                 await pchannel.send("**{}** will get attacked in 10 minutes by **{}** at **{}**!!\n{}\n-# Latency: {} {}".format(
                             embed[0].fields[2].value,
