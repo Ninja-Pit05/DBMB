@@ -27,4 +27,4 @@ def get_all_channels():
     """Returns ALL guild's auto map channel"""
     with open("database/autoUpdatesChannels.txt") as fil:
         file = json.loads(fil.read())
-        return file
+        return [file[faction] for faction in file]
