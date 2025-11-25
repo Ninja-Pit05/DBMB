@@ -214,7 +214,7 @@ async def on_command_error(ctx, error):
 # ping-pong command
 @bot.hybrid_command("ping")
 async def ping_pong(ctx):
-    await ctx.send("Pong!")
+    await ctx.send("Pong! :v")
     print("-->Ping received!" + get_info(ctx))
 
 
