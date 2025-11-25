@@ -34,7 +34,11 @@ BOT_OWNER_IDS = [
     982591657130213406,
     1195827600925405245,
 ]
-
+CHANGE_COLOR = [
+    796536076751339560,
+    982591657130213406,
+    1195827600925405245,
+]
 
 # DataBase initialization
 def _db_init(path: str):
@@ -966,13 +970,13 @@ async def analyHot(ctx,amount=30,sensibility=1.0):
 #for admins
 @bot.hybrid_group('cl')
 async def color_adm(ctx):
-    if ctx.author.id not in BOT_OWNER_IDS:
+    if ctx.author.id not in CHANGE_COLOR:
         await ctx.send("Prohibited.")
         return
 
 @color_adm.command('set')
 async def cladm_set(ctx, faction: str, color: str):
-    if ctx.author.id not in BOT_OWNER_IDS:
+    if ctx.author.id not in CHANGE_COLOR:
         await ctx.send("Prohibited.")
         return
     if not utils.is_hex(color.lower()):
@@ -984,7 +988,7 @@ async def cladm_set(ctx, faction: str, color: str):
 
 @color_adm.command('remove')
 async def cladm_rm(ctx, faction: str):
-    if ctx.author.id not in BOT_OWNER_IDS:
+    if ctx.author.id not in CHANGE_COLOR:
         await ctx.send("Prohibited.")
         return
     if faction.lower() in functions.faction_color.get_factions():
