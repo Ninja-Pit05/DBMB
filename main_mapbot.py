@@ -948,8 +948,6 @@ async def analyBoard(ctx,amount=20,type='overview'):
 #cmd heatmap
 @analysis.command('heatmap')
 async def analyHot(ctx,amount=30,sensibility=1.0):
-    #+++
-    kaksnd
     if amount>100 and ctx.author.id!=1195827600925405245:
         await ctx.send("Too High! Max of ***200***")
         return
