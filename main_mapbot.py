@@ -12,7 +12,7 @@ import random
 from time import strftime, localtime
 import asyncio
 import traceback
-#import numpy as np
+import numpy as np
 import re
 import json
 from datetime import datetime
@@ -57,7 +57,7 @@ for file in [
         _db_init(file)
 
 #creates output/ if not existent.
-if not os.path.isdir(prefix):
+if not os.path.isdir('output'):
     os.mkdir('output')
 
 # Functions to get requests key-info
