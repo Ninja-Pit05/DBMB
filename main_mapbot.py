@@ -943,7 +943,7 @@ async def analyBoard(ctx,amount=20,type='overview'):
     await ctx.send("Found data for **{}** sieges.".format(int(len(messages)/3)))
     
     #finish by sending full list.
-    await ctx.send(functions.claimAnalysis.analysisBoard(claimAnalysis.analysisToDic(messages))[:1999])
+    await ctx.send(functions.claimAnalysis.analysisBoard(functions.claimAnalysis.analysisToDic(messages))[:1999])
 
 #cmd heatmap
 @analysis.command('heatmap')
