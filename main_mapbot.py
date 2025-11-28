@@ -56,7 +56,9 @@ for file in [
     ]:
         _db_init(file)
 
-
+#creates output/ if not existent.
+if not os.path.isdir(prefix):
+    os.mkdir('output')
 
 # Functions to get requests key-info
 def get_info(ctx):
