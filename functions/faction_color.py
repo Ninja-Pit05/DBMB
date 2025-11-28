@@ -8,7 +8,7 @@ from functions import utils
 
 
 def get_faction(owner: str):
-    with open("/database/Allowed_Faction_Owners.txt") as fil:
+    with open("database/Allowed_Faction_Owners.txt") as fil:
         file = json.loads(fil.read())
         print(file)
         for faction in file:
