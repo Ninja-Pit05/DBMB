@@ -12,7 +12,7 @@ import random
 from time import strftime, localtime
 import asyncio
 import traceback
-import numpy as np
+#import numpy as np
 import re
 import json
 from datetime import datetime
@@ -57,7 +57,7 @@ for file in [
         _db_init(file)
 
 #creates output/ if not existent.
-if not os.path.isdir('output'):
+if not os.path.isdir(prefix):
     os.mkdir('output')
 
 # Functions to get requests key-info
@@ -295,7 +295,7 @@ async def faction_color_set(ctx, color=None):
         #try to change color.
         try:
             functions.faction_color.edit_color(functions.faction_color.get_faction(ctx.message.author.name),color)
-            await ctx.send(f"Faction ***{faction_color.get_faction(ctx.message.author)}*** color changed to `{color}`")
+            await ctx.send(f"Faction ***{functions.faction_color.get_faction(ctx.message.author)}*** color changed to `{color}`")
         except Exception as e:
             await ctx.send(f"ERROR: {e}")
             print("\033[31m ERROR! Exception at 'faction color set' : {}".format(e), "\033[0m" )
